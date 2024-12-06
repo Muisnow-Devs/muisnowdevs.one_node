@@ -3,6 +3,7 @@ import { classFormat } from "@/utils";
 import { Link, MetaFunction } from "@remix-run/react";
 import { PropsWithChildren } from "react";
 import { FaQuoteLeft } from "react-icons/fa";
+import { QuoteEffect } from "./effect";
 
 export const meta: MetaFunction = () => {
     return [
@@ -23,8 +24,8 @@ const Block = (configs: BlockArgs) => <div
 </div>;
 
 export default function AboutPage() {
-    return <div className="p-5">
-        <div className="m-4 lg:m-8">
+    return <div className="p-5 flex justify-center">
+        <div className="m-4 lg:m-8 max-w-7xl">
             <h1 className="text-4xl font-black my-5">Hi 👋! 我是 Muisnow</h1>
 
             <div className="flex gap-5 flex-col">
@@ -46,7 +47,7 @@ export default function AboutPage() {
                     <Block className="!p-12 col-span-3 lg:col-span-2">
                         <div className="text-4xl mb-5 text-gray-400"><FaQuoteLeft /></div>
                         <p className="text-2xl">
-                            所謂的人生，只不過就是個有限的探索，既然無法知曉其結局，那就當作是一場豪賭吧！
+                            <QuoteEffect text="所謂的人生，只不過就是個有限的探索，既然無法知曉其結局，那就當作是一場豪賭吧！" />
                         </p>
                         <p className="text-2xl mt-5 text-right">—— Muisnow</p>
                     </Block>
