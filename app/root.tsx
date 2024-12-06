@@ -1,13 +1,17 @@
 import {
+    isRouteErrorResponse,
     Links,
     Meta,
+    MetaFunction,
     Outlet,
     Scripts,
     ScrollRestoration,
+    useRouteError,
 } from "@remix-run/react";
 import type { LinksFunction } from "@remix-run/node";
 
 import "./tailwind.css";
+import { BackToHome, GradText } from "./components/text";
 
 export const links: LinksFunction = () => [
     { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -23,6 +27,27 @@ export const links: LinksFunction = () => [
     },
 ];
 
+export const meta: MetaFunction = ({ error }) => {
+    if (!error)
+        return [];
+
+    return [
+        { title: "逼逼！錯誤錯誤！ - Muisnow Devs" },
+        { name: "robots", content: "noindex" },
+        { name: "description", content: "An error occurred" },
+    ];
+};
+
+export function Copyright() {
+    return <div className="w-full h-screen relative bg-black">
+        <div className="absolute top-0 left-0 -z-50 -translate-y-10 bg-black w-full h-full"></div>
+        <div className="w-full h-full grid place-content-center">
+            <div className="text-white text-xl font-bold mb-5">© 2024 <GradText>Muisnow</GradText>.</div>
+            <div className="text-white text-xl font-bold">This site is hosting under SanZi Network&apos;s cloud server.</div>
+        </div>
+    </div>;
+}
+
 export function Layout({ children }: { children: React.ReactNode }) {
     return (
         <html lang="en">
@@ -33,12 +58,33 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <Links />
             </head>
             <body>
-                {children}
+                <div className="rounded-b-3xl bg-white">
+                    {children}
+                </div>
                 <ScrollRestoration />
                 <Scripts />
+
+                <Copyright />
             </body>
         </html>
     );
+}
+
+export function ErrorBoundary() {
+    const error = useRouteError();
+
+    return <div className="w-full h-screen p-10 grid place-content-center">
+        <h1 className="text-4xl font-bold">{isRouteErrorResponse(error) ? error.status : "Error"}</h1>
+        <p className="text-2xl text-gray-500">{isRouteErrorResponse(error) ? error.statusText : "An error occurred"}</p>
+
+        <div>
+            <p>
+                讓我們回家好嗎？
+            </p>
+
+            <BackToHome />
+        </div>
+    </div>;
 }
 
 export default function App() {

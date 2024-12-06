@@ -3,5 +3,9 @@
 @tailwind utilities;
 
 * {
-  font-family: 'Poppins', 'Noto Sans TC', sans-serif;
+    font-family: 'Poppins', 'Noto Sans TC', sans-serif;
+}
+
+p {
+    @apply mb-4 last:mb-0 text-lg;
 }

@@ -10,6 +10,8 @@ export const meta: MetaFunction = () => {
 
 export default function Index() {
     return (
-        <Home />
+        <div className="h-screen w-full grid place-content-center p-2">
+            <Home />
+        </div>
     );
 }
