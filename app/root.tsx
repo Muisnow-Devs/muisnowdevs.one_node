@@ -42,7 +42,7 @@ export function Copyright() {
     return <div className="w-full h-screen relative bg-black">
         <div className="absolute top-0 left-0 -z-50 -translate-y-10 bg-black w-full h-full"></div>
         <div className="w-full h-full grid place-content-center">
-            <div className="text-white text-xl font-bold mb-5">© 2024 <GradText>Muisnow</GradText>.</div>
+            <div className="text-white text-xl font-bold mb-5">© 2025 <GradText>Muisnow</GradText>.</div>
             <div className="text-white text-xl font-bold">This site is hosting under SanZi Network&apos;s cloud server.</div>
         </div>
     </div>;
