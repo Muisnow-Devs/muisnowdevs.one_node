@@ -64,8 +64,15 @@ export const LinkButton = (configs: LinkButtonArgs) => <Link
     {configs.children}
 </Link>;
 
-export const BackToHome = () => <LinkButton to={"/"} icon={FaHome} className="bg-blue-500 text-white">返回首頁</LinkButton>;
-export const BackToArticle = () => <LinkButton to={"/article"} icon={FaArrowLeft}>返回文章列表</LinkButton>;
+export const LinkWithIcon = (configs: LinkButtonArgs) => <Link
+    to={configs.to}
+    className="text-[#0066ec] inline-flex items-center gap-1 group">
+    {configs.icon && <configs.icon className="group-hover:animate-bounce-left h-full" />}
+    {configs.children}
+</Link>;
+
+export const BackToHome = () => <LinkWithIcon to={"/"} icon={FaHome} className="bg-blue-500 text-white">返回首頁</LinkWithIcon>;
+export const BackToArticle = () => <LinkWithIcon to={"/article"} icon={FaArrowLeft}>返回文章列表</LinkWithIcon>;
 
 export interface HilightsArgs extends PropsWithChildren { }
 export const Hilights = (configs: HilightsArgs) => <span className="bg-yellow-200 font-bold">{configs.children}</span>;

@@ -3,19 +3,19 @@ import plugin from "tailwindcss/plugin";
 
 export default {
   content: ["./app/**/{**,.client,.server}/**/*.{js,jsx,ts,tsx}"],
+  daisyui: {
+    themes: ['light']
+  },
   theme: {
     extend: {
       fontFamily: {
         sans: [
-          "Inter",
-          "ui-sans-serif",
-          "system-ui",
-          "sans-serif",
-          "Apple Color Emoji",
-          "Segoe UI Emoji",
-          "Segoe UI Symbol",
-          "Noto Color Emoji",
+          "Noto Sans TC",
+          "Poppins"
         ],
+        mono: [
+          "Fira Code"
+        ]
       },
       keyframes: {
         "fade-in": {
@@ -26,15 +26,28 @@ export default {
           "0%": { width: "100%", left: "0%" },
           "100%": { width: "0%", left: "100%" },
         },
+        "bounce-left": {
+          "0%": { transform: "translateX(0)" },
+          "50%": { transform: "translateX(-5px)" },
+          "100%": { transform: "translateX(0)" },
+        },
+        "bounce-right": {
+          "0%": { transform: "translateX(0)" },
+          "50%": { transform: "translateX(5px)" },
+          "100%": { transform: "translateX(0)" },
+        },
       },
       animation: {
         "fade-in": "fade-in ease-in-out",
         "width-down": "width-down ease-in-out",
+        "bounce-left": "bounce-left .3s linear",
+        "bounce-right": "bounce-right .3s linear",
       },
     },
   },
   plugins: [
     require("daisyui"),
+    require('@tailwindcss/typography'),
     plugin(function ({ matchUtilities, theme }) {
       matchUtilities(
         {

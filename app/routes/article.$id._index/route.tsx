@@ -3,6 +3,11 @@ import db from "@/db/client.server";
 import { asc, desc, eq, gt, lt } from "drizzle-orm";
 import invariant from "tiny-invariant";
 import { useLoaderData } from "@remix-run/react";
+import MarkdownComponent from "./markdown";
+import { BackToArticle } from "@/components/text";
+import { FaBookmark, FaClock, FaHashtag } from "react-icons/fa";
+import Header from "./header";
+import { useRef } from "react";
 
 async function getArticle(id: string) {
     const response = await db
@@ -18,7 +23,8 @@ async function getArticle(id: string) {
                 }
             },
             columns: {
-                enabled: false
+                enabled: false,
+                collection: false
             }
         });
     
@@ -67,8 +73,36 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
 export default function ArticlePage() {
     const data = useLoaderData<typeof loader>();
+    const articleRef = useRef<HTMLDivElement>(null);
+    const nextArticleRef = useRef<HTMLDivElement>(null);
 
-    console.log(data);
+    return <div>
+        <Header title={data.title ?? ""} articleRef={articleRef} nextArticleRef={nextArticleRef} />
 
-    return <div>{JSON.stringify(data ?? {})}</div>;
+        <div className="p-5">
+            <div className="w-full flex flex-col items-center">
+                <div className="w-full max-w-7xl">
+                    <div className="mt-2">
+                        <BackToArticle />
+                        <h1 className="text-6xl font-bold mt-8">{data.title}</h1>
+
+                        <div className="mt-8 font-bold">
+                            <div className="flex my-4 mx-2 items-center"><FaClock className="inline w-9 h-4" /> {data.createdAt?.toLocaleString()}</div>
+                            <div className="flex my-4 mx-2 items-center"><FaBookmark className="inline w-9 h-4" /> <span className="badge badge-lg bg-gray-300 py-2 pl-1"><FaHashtag className="mr-1" /> {data.collection?.title}</span></div>
+                        </div>
+                    </div>
+
+                    <div className="divider mb-10">文章</div>
+
+                    <div ref={articleRef}>
+                        <MarkdownComponent>{data.content ?? ""}</MarkdownComponent>
+                    </div>
+
+                    <div ref={nextArticleRef}>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>;
 }
