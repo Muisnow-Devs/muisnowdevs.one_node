@@ -21,15 +21,13 @@ export default function Header(configs: HeaderProps) {
             const { height: articleHeight, top: articleY } = configs.articleRef.current.getBoundingClientRect();
             const { height: nextArticleHeight } = configs.nextArticleRef.current.getBoundingClientRect();
 
-            setShow(0 >= articleY && 0 < articleY + articleHeight);
+            setShow(0 >= articleY && 0 < articleY + articleHeight && readPrecentages < 1 && readPrecentages > 0);
             setReadPrecentages((height - articleY) / (2 * (articleY + height + articleHeight - 3 * nextArticleHeight)));
         }
 
         window.addEventListener("scroll", scroll);
         return () => window.removeEventListener("scroll", scroll);
-    }, [ref, configs.articleRef, configs.nextArticleRef]);
-
-    console.log(`precentages: ${readPrecentages}`);
+    }, [ref, configs.articleRef, configs.nextArticleRef, readPrecentages]);
 
     return <div ref={ref} className={classFormat([
         "fixed top-0 left-0 w-full h-max z-50 bg-white/50 backdrop-blur-xl transition-all ease-in-out duration-300 rounded-b-3xl shadow-lg",
@@ -47,7 +45,7 @@ export default function Header(configs: HeaderProps) {
         </div>
 
         <div className="absolute top-0 bg-slate-500/20 h-full -z-10 rounded-b-3xl" style={{
-            width: readPrecentages > 0 ? `${(readPrecentages + 0.02) * 100}%` : 0
+            width: readPrecentages > 0 ? `${readPrecentages * 100}%` : 0
         }}></div>
     </div>;
 }

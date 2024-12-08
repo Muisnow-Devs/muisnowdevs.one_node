@@ -8,6 +8,7 @@ import { BackToArticle } from "@/components/text";
 import { FaBookmark, FaClock, FaHashtag } from "react-icons/fa";
 import Header from "./header";
 import { useRef } from "react";
+import NextArticleComponent from "./nextarticle";
 
 async function getArticle(id: string) {
     const response = await db
@@ -98,8 +99,10 @@ export default function ArticlePage() {
                         <MarkdownComponent>{data.content ?? ""}</MarkdownComponent>
                     </div>
 
-                    <div ref={nextArticleRef}>
-
+                    <div className="flex justify-between gap-2 mt-20 flex-col md:flex-row p-4 rounded-xl bg-gray-200" ref={nextArticleRef}>
+                        <div className="flex-1">{data.near.next && <NextArticleComponent id={data.near.next?.id ?? 0} title={data.near.next?.title ?? ""} rtl={true} />}</div>
+                        <div className="divider md:divider-horizontal m-0"></div>
+                        <div className="flex-1">{data.near.previous && <NextArticleComponent id={data.near.previous?.id ?? 0} title={data.near.previous?.title ?? ""} />}</div>
                     </div>
                 </div>
             </div>

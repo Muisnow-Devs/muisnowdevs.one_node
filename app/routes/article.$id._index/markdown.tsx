@@ -53,6 +53,12 @@ export default function MakrdownComponent(configs: MarkdownComponentArgs) {
             components={{
                 pre: ({ children }) => <>{children}</>,
                 code: Code,
+                h1: ({ children }) => <h1 id={String(children).replace(/\s/g, "-").toLowerCase()}>
+                    <button
+                        onClick={() => navigator.clipboard.writeText(location.href + "#" + String(children).replace(/\s/g, "-").toLowerCase())}>
+                        {children}
+                    </button>
+                </h1>,
             }}
             remarkPlugins={[remarkGfm, directive]}
             rehypePlugins={[rehypeRaw]}>
