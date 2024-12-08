@@ -40,7 +40,7 @@ export default function Header(configs: HeaderProps) {
                     <div className="flex justify-center after:content-['•'] after:text-gray-500 after:px-2"><BackToArticle /></div>
                     <div>Muisnow Devs</div>
                 </div>
-                <h1 className="text-4xl font-bold truncate w-full my-3">{configs.title}asndkansdkandkansdnajsdnjkasnksadsad</h1>
+                <h1 className="text-4xl font-bold truncate w-full my-3">{configs.title}</h1>
             </div>
         </div>
 
