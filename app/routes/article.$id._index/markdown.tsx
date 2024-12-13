@@ -5,8 +5,8 @@ import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import directive from "remark-directive";
 import { classFormat } from "@/utils";
-import { FaArrowUp, FaCheck, FaCopy } from "react-icons/fa";
-import React, { useState, ImgHTMLAttributes, AnchorHTMLAttributes, DetailedHTMLProps } from "react";
+import { FaArrowUp, FaCheck, FaCopy, FaLink } from "react-icons/fa";
+import React, { useState, ImgHTMLAttributes, AnchorHTMLAttributes, DetailedHTMLProps, PropsWithChildren, useEffect } from "react";
 import { Link } from "@remix-run/react";
 import { FaArrowUpRightFromSquare } from "react-icons/fa6";
 import { visit } from "unist-util-visit";
@@ -63,7 +63,34 @@ function Img({ src, alt }: ImgHTMLAttributes<HTMLImageElement>) {
 
 function LinkComponent({ href, children }: AnchorHTMLAttributes<HTMLAnchorElement>) {
     const isExternal = (href ?? "").startsWith("http");
-    return <Link to={href ?? ""} className="text-blue-500 no-underline hover:underline">{children} {isExternal && <FaArrowUpRightFromSquare className="inline" />}</Link>
+    return <Link to={href ?? ""} className="text-blue-500 no-underline hover:underline" target={isExternal ? "_blank" : ""} rel={isExternal ? "noopener noreferrer" : ""}>
+        {children} {isExternal && <FaArrowUpRightFromSquare className="inline" />}
+    </Link>
+}
+
+function CopiableTitle({ children }: PropsWithChildren) {
+    const [isClicked, setIsClicked] = useState(false);
+
+    function copy() {
+        navigator.clipboard.writeText(location.href + "#" + String(children).replace(/\s/g, "-").toLowerCase());
+        setIsClicked(true);
+    }
+
+    useEffect(() => {
+        if (isClicked)
+            setTimeout(() => setIsClicked(false), 1000);
+    }, [isClicked]);
+
+    return <h1 id={String(children).replace(/\s/g, "-").toLowerCase()} className="group flex">
+        {!isClicked && <FaLink className="inline-block invisible group-hover:visible group-hover:mr-2 transition-all w-0 group-hover:w-6" />}
+        {isClicked && <FaCheck className="inline-block invisible group-hover:visible group-hover:mr-2 transition-all w-0 group-hover:w-6" />}
+        <button
+            className="group-hover:text-blue-500 transition-all tooltip"
+            data-tip="複製連結"
+            onClick={copy}>
+            # {children}
+        </button>
+    </h1>
 }
 
 function reactMarkdownRemarkDirective() {
@@ -96,14 +123,9 @@ export default function MakrdownComponent(configs: MarkdownComponentArgs) {
             components={{
                 pre: ({ children }) => <>{children}</>,
                 code: Code,
-                img: Img,
-                a: LinkComponent,
-                h1: ({ children }) => <h1 id={String(children).replace(/\s/g, "-").toLowerCase()}>
-                    <button
-                        onClick={() => navigator.clipboard.writeText(location.href + "#" + String(children).replace(/\s/g, "-").toLowerCase())}>
-                        {children}
-                    </button>
-                </h1>,
+                img: ({ src, alt }) => <Img src={src} alt={alt} />,
+                a: ({ href, children }) => <LinkComponent href={href}>{children}</LinkComponent>,
+                h1: ({ children }) => <CopiableTitle>{children}</CopiableTitle>,
                 // @ts-expect-error Custom components
                 download: ({ children }) => <div>KKKAKA {children}</div>
             }}

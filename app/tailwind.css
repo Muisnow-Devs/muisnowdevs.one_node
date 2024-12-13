@@ -17,8 +17,3 @@ code * {
 pre code, code {
     @apply rounded-xl;
 }
-
-.prose h1:before {
-    content: "#";
-    @apply text-5xl mr-5;
-}
