@@ -1,11 +1,22 @@
-import { BackToArticle } from "@/components/text";
+import { BackToArticle, MonoText } from "@/components/text";
 import { classFormat } from "@/utils";
-import { useEffect, useRef, useState } from "react";
+import { PropsWithChildren, useEffect, useRef, useState } from "react";
 
 interface HeaderProps {
     title: string;
     articleRef: React.RefObject<HTMLDivElement>;
     nextArticleRef: React.RefObject<HTMLDivElement>;
+}
+
+interface ItemArgs extends PropsWithChildren {
+    className?: string;
+}
+
+function Item(props: ItemArgs) {
+    return <div className={classFormat([
+        "after:content-['•'] after:text-gray-500 after:px-2 last:after:content-none",
+        props.className
+    ])}>{props.children}</div>;
 }
 
 export default function Header(configs: HeaderProps) {
@@ -40,8 +51,11 @@ export default function Header(configs: HeaderProps) {
         <div className="flex justify-center p-5 py-2">
             <div className="w-full max-w-7xl">
                 <div className="flex my-2">
-                    <div className="flex justify-center after:content-['•'] after:text-gray-500 after:px-2"><BackToArticle /></div>
-                    <div>Muisnow Devs</div>
+                    <Item className="flex justify-center"><BackToArticle /></Item>
+                    <Item className="hidden sm:block">
+                        已閱讀 <MonoText>{readPrecentages > 0 ? (readPrecentages * 100).toFixed(0) : 0}%</MonoText>
+                    </Item>
+                    <Item>Muisnow Devs</Item>
                 </div>
                 <h1 className="text-4xl font-bold truncate w-full my-3">{configs.title}</h1>
             </div>

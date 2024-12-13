@@ -43,10 +43,10 @@ export const IconLink = (configs: IconLinkArgs) => <div className={classFormat([
 </div>;
 
 export interface MonoTextArgs extends PropsWithChildren {
-    className: string;
+    className?: string;
 }
 
-export const MonoText = (configs: MonoTextArgs) => <span className={classFormat([configs.className])}>{configs.children}</span>;
+export const MonoText = (configs: MonoTextArgs) => <span className={classFormat(["font-mono", configs.className])}>{configs.children}</span>;
 
 export interface LinkButtonArgs extends PropsWithChildren {
     className?: string;

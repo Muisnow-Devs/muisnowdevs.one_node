@@ -1,6 +1,7 @@
 import { vitePlugin as remix } from "@remix-run/dev";
 import { defineConfig } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
+import svgr from "vite-plugin-svgr";
 
 declare module "@remix-run/node" {
   interface Future {
@@ -20,6 +21,7 @@ export default defineConfig({
       },
     }),
     tsconfigPaths(),
+    svgr()
   ],
   optimizeDeps: {
     // exclude: ["react-syntax-highlighter"],

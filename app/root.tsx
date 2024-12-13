@@ -9,9 +9,10 @@ import {
     useRouteError,
 } from "@remix-run/react";
 import type { LinksFunction } from "@remix-run/node";
+import { BackToHome, GradText } from "./components/text";
+import Logo from "@/components/logos/main.svg?react";
 
 import "./tailwind.css";
-import { BackToHome, GradText } from "./components/text";
 
 export const links: LinksFunction = () => [
     { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -42,7 +43,9 @@ export function Copyright() {
     return <div className="w-full h-screen relative bg-black">
         <div className="absolute top-0 left-0 -z-50 -translate-y-10 bg-black w-full h-full"></div>
         <div className="w-full h-full grid place-content-center">
-            <div className="text-white text-xl font-bold mb-5">© 2025 <GradText>Muisnow</GradText>.</div>
+            <Logo width={256} className="mb-12" />
+
+            <div className="text-white text-xl font-bold mb-2">© 2025 <GradText>Muisnow</GradText> and <GradText>Muisnow Devs</GradText>.</div>
             <div className="text-white text-xl font-bold">This site is hosting under SanZi Network&apos;s cloud server.</div>
         </div>
     </div>;
