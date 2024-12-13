@@ -9,6 +9,8 @@ import { FaArrowUp, FaCheck, FaCopy } from "react-icons/fa";
 import React, { useState, ImgHTMLAttributes, AnchorHTMLAttributes, DetailedHTMLProps } from "react";
 import { Link } from "@remix-run/react";
 import { FaArrowUpRightFromSquare } from "react-icons/fa6";
+import { visit } from "unist-util-visit";
+import type { Root } from "mdast";
 
 function Code({ inline, className, children, ...props }: { inline?: boolean } & DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement>) {
     const [isClicked, setIsClicked] = useState(false);
@@ -38,6 +40,7 @@ function Code({ inline, className, children, ...props }: { inline?: boolean } & 
             // @ts-expect-error The type of style is the same as the style of SyntaxHighlighter.
             style={atomDark}
             language={match[1]}
+            showLineNumbers={!["shell", "plaintext", "markdown", "text"].includes(match[1])}
             {...props}>{String(children).replace(/\n$/, "")}</SyntaxHighlighter>
     </div> : (
         <code className={classFormat([className, "font-mono text-purple-600"])} {...props}>
@@ -63,6 +66,26 @@ function LinkComponent({ href, children }: AnchorHTMLAttributes<HTMLAnchorElemen
     return <Link to={href ?? ""} className="text-blue-500 no-underline hover:underline">{children} {isExternal && <FaArrowUpRightFromSquare className="inline" />}</Link>
 }
 
+function reactMarkdownRemarkDirective() {
+    return (tree: Root) => {
+        // @ts-expect-error The method visit is well defined.
+        visit(
+            tree,
+            ["textDirective", "leafDirective", "containerDirective"],
+            (node) => {
+                node.data = {
+                    // @ts-expect-error node name is definded in node.
+                    hName: node.name,
+                    // @ts-expect-error attributes is definded in node.
+                    hProperties: node.attributes,
+                    ...node.data
+                };
+                return node;
+            }
+        );
+    };
+}
+
 interface MarkdownComponentArgs {
     children: string;
 }
@@ -81,8 +104,10 @@ export default function MakrdownComponent(configs: MarkdownComponentArgs) {
                         {children}
                     </button>
                 </h1>,
+                // @ts-expect-error Custom components
+                download: ({ children }) => <div>KKKAKA {children}</div>
             }}
-            remarkPlugins={[remarkGfm, directive]}
+            remarkPlugins={[remarkGfm, directive, reactMarkdownRemarkDirective]}
             rehypePlugins={[rehypeRaw]}>
             {configs.children}
         </Markdown>

@@ -15,14 +15,17 @@ export default function Header(configs: HeaderProps) {
 
     useEffect(() => {
         function scroll() {
-            if (!configs.articleRef.current || !configs.nextArticleRef.current) return;
+            if (!configs.articleRef.current
+                || !configs.nextArticleRef.current
+                || !ref.current)
+                return;
 
             const height = window.scrollY;
             const { height: articleHeight, top: articleY } = configs.articleRef.current.getBoundingClientRect();
             const { height: nextArticleHeight } = configs.nextArticleRef.current.getBoundingClientRect();
 
             setShow(0 >= articleY && 0 < articleY + articleHeight && readPrecentages < 1 && readPrecentages > 0);
-            setReadPrecentages((height - articleY) / (2 * (articleY + height + articleHeight - 3 * nextArticleHeight)));
+            setReadPrecentages((height - articleY) / (2 * (articleY + height + articleHeight - nextArticleHeight - ref.current.clientHeight)));
         }
 
         window.addEventListener("scroll", scroll);

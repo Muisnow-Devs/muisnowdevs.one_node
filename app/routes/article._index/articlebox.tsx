@@ -1,3 +1,4 @@
+import { classFormat } from "@/utils";
 import { Link } from "@remix-run/react";
 
 interface ArticleBoxComonentArgs {
@@ -8,7 +9,10 @@ interface ArticleBoxComonentArgs {
 }
 
 export default function ArticleBoxComponent(configs: ArticleBoxComonentArgs) {
-    return <Link to={String(configs.id)} className="card rounded-xl shadow-lg border border-gray-500 p-5 hover:shadow-2xl transition-all hover:scale-105">
+    return <Link to={String(configs.id)} className={classFormat([
+        "card rounded-xl shadow-lg border border-gray-500 p-5 hover:shadow-2xl transition-all hover:scale-105",
+        "active:shadow-2xl active:scale-95 active:bg-gray-100"
+    ])}>
         <div>
             <h1 className="text-4xl font-black text-black break-all leading-[3rem]">{configs.title}</h1>
             <span className="block text-gray-500 mt-2">{configs.createdAt.toLocaleString()}</span>

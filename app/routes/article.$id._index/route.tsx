@@ -2,13 +2,21 @@ import { LoaderFunctionArgs } from "@remix-run/node";
 import db from "@/db/client.server";
 import { asc, desc, eq, gt, lt } from "drizzle-orm";
 import invariant from "tiny-invariant";
-import { useLoaderData } from "@remix-run/react";
+import { MetaFunction, useLoaderData } from "@remix-run/react";
 import MarkdownComponent from "./markdown";
 import { BackToArticle } from "@/components/text";
 import { FaBookmark, FaClock, FaHashtag } from "react-icons/fa";
 import Header from "./header";
 import { useRef } from "react";
 import NextArticleComponent from "./nextarticle";
+import Comments from "./comments";
+
+export const meta: MetaFunction<typeof loader> = ({ data }) => {
+    return [
+        { title: data && data.title ? `${data.title} - Muisnow Devs` : "找不到文章 - Muisnow Devs" },
+        { name: "description", content: data && data.description ? data.description : "你迷失了自我。從起點開始你新的旅途吧！" },
+    ];
+};
 
 async function getArticle(id: string) {
     const response = await db
@@ -28,6 +36,9 @@ async function getArticle(id: string) {
                 collection: false
             }
         });
+    
+    if (!response) 
+        throw new Response(null, { status: 404 });
     
     // get previous and next article
     const previous = await db
@@ -104,8 +115,25 @@ export default function ArticlePage() {
                         <div className="divider md:divider-horizontal m-0"></div>
                         <div className="flex-1">{data.near.previous && <NextArticleComponent id={data.near.previous?.id ?? 0} title={data.near.previous?.title ?? ""} />}</div>
                     </div>
+
+                    <div className="divider"></div>
+
+                    <div>
+                        {data.comment && <Comments id={data.id ?? 0} />}
+                        {!data.comment && <div className="text-center text-gray-500">此文章暫時關閉評論</div>}
+                    </div>
                 </div>
             </div>
+        </div>
+    </div>;
+}
+
+export function ErrorBoundary() {
+    return <div className="w-full h-screen grid place-items-center">
+        <div>
+            <h1 className="text-4xl font-bold mb-5">文章不存在 😭</h1> 
+            <p className="max-w-xl">抱歉！你可能來晚了，在這個無垠的宇宙之中，這篇無名的文章如同塵埃般消失在永無止境的時光之中。</p>
+            <BackToArticle />
         </div>
     </div>;
 }

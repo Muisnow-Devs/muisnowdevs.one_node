@@ -26,7 +26,10 @@ export interface IconLinkArgs {
     className?: string;
 }
 
-export const IconLink = (configs: IconLinkArgs) => <div className={classFormat([configs.className])}>
+export const IconLink = (configs: IconLinkArgs) => <div className={classFormat([
+    "tooltip",
+    configs.className
+])} data-tip={configs.name}>
     <Link to={configs.link} className="inline-flex justify-center items-center p-2" title={configs.name}>
         <configs.icon className={classFormat([
             "inline w-9 h-9 transition-colors ease-in-out",
