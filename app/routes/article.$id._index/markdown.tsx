@@ -23,6 +23,8 @@ function Code({ inline, className, children, ...props }: { inline?: boolean } & 
         setTimeout(() => setIsClicked(false), 1000);
     }
 
+    const isPlain = !match || ["shell", "plaintext", "markdown", "text"].includes(match[1]);
+
     return !inline && match ? <div className="mb-5 last:mb-0">
         <div className="bg-purple-800 text-white py-2 px-4 rounded-t-xl">
             {/* Match first letter uppercase */}
@@ -37,12 +39,17 @@ function Code({ inline, className, children, ...props }: { inline?: boolean } & 
         </div>
 
         <SyntaxHighlighter
-            className="!rounded-b-xl !rounded-t-none !mt-0"
+            className={classFormat([
+                "!rounded-none !mt-0 !mb-0",
+                isPlain && "!rounded-b-xl",
+            ])}
             // @ts-expect-error The type of style is the same as the style of SyntaxHighlighter.
             style={atomDark}
             language={match[1]}
-            showLineNumbers={!["shell", "plaintext", "markdown", "text"].includes(match[1])}
+            showLineNumbers={!isPlain}
             {...props}>{String(children).replace(/\n$/, "")}</SyntaxHighlighter>
+        
+        {!isPlain && <div className="bg-gray-200 p-2 px-4 rounded-b-xl italic">除非特別註明，此程式碼的版權均歸屬於 Muisnow 與 Muisnow Devs 。</div>}
     </div> : (
         <code className={classFormat([className, "font-mono text-purple-600"])} {...props}>
             {children}
