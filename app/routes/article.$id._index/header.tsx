@@ -1,6 +1,7 @@
-import { BackToArticle, MonoText } from "@/components/text";
+import { BackToArticle } from "@/components/text";
 import { classFormat } from "@/utils";
 import { PropsWithChildren, useEffect, useRef, useState } from "react";
+import NumberFlow from '@number-flow/react';
 
 interface HeaderProps {
     title: string;
@@ -53,7 +54,7 @@ export default function Header(configs: HeaderProps) {
                 <div className="flex my-2">
                     <Item className="flex justify-center"><BackToArticle /></Item>
                     <Item className="hidden sm:block">
-                        已閱讀 <MonoText>{readPrecentages > 0 ? (readPrecentages * 100).toFixed(0) : 0}%</MonoText>
+                        已閱讀 <NumberFlow className="font-mono" value={readPrecentages > 0 ? Math.round(readPrecentages * 100) : 0} suffix="%" />
                     </Item>
                     <Item>Muisnow Devs</Item>
                 </div>
