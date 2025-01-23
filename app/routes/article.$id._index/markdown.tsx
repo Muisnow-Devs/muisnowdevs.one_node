@@ -11,6 +11,7 @@ import { Link } from "@remix-run/react";
 import { FaArrowUpRightFromSquare } from "react-icons/fa6";
 import { visit } from "unist-util-visit";
 import type { Root } from "mdast";
+import DownloadComponent from "./download";
 
 function Code({ inline, className, children, ...props }: { inline?: boolean } & DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement>) {
     const [isClicked, setIsClicked] = useState(false);
@@ -126,8 +127,9 @@ export default function MakrdownComponent(configs: MarkdownComponentArgs) {
                 img: ({ src, alt }) => <Img src={src} alt={alt} />,
                 a: ({ href, children }) => <LinkComponent href={href}>{children}</LinkComponent>,
                 h1: ({ children }) => <CopiableTitle>{children}</CopiableTitle>,
+                
                 // @ts-expect-error Custom components
-                download: ({ children }) => <div>KKKAKA {children}</div>
+                download: ({ children }) => <DownloadComponent id={children} />
             }}
             remarkPlugins={[remarkGfm, directive, reactMarkdownRemarkDirective]}
             rehypePlugins={[rehypeRaw]}>

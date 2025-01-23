@@ -113,7 +113,10 @@ export default function ArticlePage() {
                     <div className="flex justify-between gap-2 mt-20 flex-col md:flex-row p-4 rounded-xl bg-gray-200" ref={nextArticleRef}>
                         <div className="flex-1">{data.near.next && <NextArticleComponent id={data.near.next?.id ?? 0} title={data.near.next?.title ?? ""} rtl={true} />}</div>
                         <div className="divider md:divider-horizontal m-0"></div>
-                        <div className="flex-1">{data.near.previous && <NextArticleComponent id={data.near.previous?.id ?? 0} title={data.near.previous?.title ?? ""} />}</div>
+                        <div className="flex-1">
+                            {data.near.previous && <NextArticleComponent id={data.near.previous?.id ?? 0} title={data.near.previous?.title ?? ""} />}
+                            {!data.near.previous && <div className="h-full gird place-content-center text-center text-gray-500">恭喜！您發現了首篇文章了！</div>}
+                        </div>
                     </div>
 
                     <div className="divider"></div>

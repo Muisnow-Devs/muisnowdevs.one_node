@@ -62,17 +62,14 @@ export const downloadableFiles = mysqlTable("downloadable_file", {
     filename: varchar("filename", { length: 64 })
         .notNull()
         .unique(),
+    description: text("description"),
     originalFilename: varchar("original_filename", { length: 36 })
         .notNull()
         .unique()
         .$defaultFn(() => v4()),
     fileImage: varchar("file_image", { length: 40 }),
-    fileType: varchar("file_type", { length: 128 })
-        .notNull()
-        .default("application/octet-stream"),
-    fileSize: int("file_size")
-        .notNull()
-        .default(0),
+    fileType: varchar("file_type", { length: 128 }),
+    fileSize: int("file_size"),
     hash: varchar("hash", { length: 40 }),
     isS3: boolean("s3")
         .notNull()
