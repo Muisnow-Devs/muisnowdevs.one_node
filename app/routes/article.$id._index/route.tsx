@@ -1,6 +1,6 @@
 import { LoaderFunctionArgs } from "@remix-run/node";
 import db from "@/db/client.server";
-import { asc, desc, eq, gt, lt } from "drizzle-orm";
+import { and, asc, desc, eq, gt, lt } from "drizzle-orm";
 import invariant from "tiny-invariant";
 import { MetaFunction, useLoaderData } from "@remix-run/react";
 import MarkdownComponent from "@/components/markdown";
@@ -23,7 +23,7 @@ async function getArticle(id: string) {
         .query
         .articles
         .findFirst({
-            where: (v) => eq(v.id, Number(id)),
+            where: (v) => and(eq(v.id, Number(id)), eq(v.enabled, true)),
             with: {
                 collection: {
                     columns: {

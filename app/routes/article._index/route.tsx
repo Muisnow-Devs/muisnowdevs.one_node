@@ -1,7 +1,7 @@
 import { GradText } from "@/components/text";
 import { LoaderFunctionArgs } from "@remix-run/node";
 import db from "@/db/client.server";
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { Link, MetaFunction, useFetcher, useLoaderData } from "@remix-run/react";
 import { useEffect, useState } from "react";
 import ArticleBoxComponent from "./articlebox";
@@ -26,6 +26,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         .query
         .articles
         .findMany({
+            where: (v) => eq(v.enabled, true),
             orderBy: (v) => desc(v.id),
             offset: (page - 1) * limit,
             limit,

@@ -1,6 +1,6 @@
 import db from "@/db/client.server";
 import { getResourceMimeType, getResourceSize } from "@/storage/aws.server";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 
 
@@ -9,7 +9,7 @@ export async function getItem(id: string) {
         .query
         .downloadableFiles
         .findFirst({
-            where: (v) => eq(v.id, id),
+            where: (v) => and(eq(v.id, id), eq(v.enabled, true)),
             columns: {
                 id: true,
                 fileImage: true,
@@ -36,7 +36,7 @@ export async function getItemFilenames(id: string) {
         .query
         .downloadableFiles
         .findFirst({
-            where: (v) => eq(v.id, id),
+            where: (v) => and(eq(v.id, id), eq(v.enabled, true)),
             columns: {
                 originalFilename: true,
                 filename: true
