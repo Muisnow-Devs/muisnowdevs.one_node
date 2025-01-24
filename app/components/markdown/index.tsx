@@ -99,7 +99,7 @@ export function CopiableTitle({ children }: PropsWithChildren) {
         {!isClicked && <FaLink className="inline-block invisible group-hover:visible group-hover:mr-2 transition-all w-0 group-hover:w-6" />}
         {isClicked && <FaCheck className="inline-block invisible group-hover:visible group-hover:mr-2 transition-all w-0 group-hover:w-6" />}
         <button
-            className="group-hover:text-blue-500 transition-all tooltip"
+            className="group-hover:text-blue-500 transition-all tooltip text-start"
             data-tip="複製連結"
             onClick={copy}>
             # {children}
