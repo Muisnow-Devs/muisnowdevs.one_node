@@ -1,5 +1,4 @@
 import { checkUUID, humanFileSize } from "@/utils";
-import { Link } from "@remix-run/react";
 import { useEffect, useState } from "react";
 import { FaDownload, FaFile } from "react-icons/fa";
 
@@ -30,7 +29,7 @@ function DownloadBox(data: DownloadBoxArgs) {
                     <p className="text-gray-500">檔案大小: {humanFileSize(data.size)}</p>
                 </div>
                 <div>
-                    <Link to={"/download/" + data.id} className="btn btn-primary w-full mt-2 sm:mt-0 sm:w-fit sm:rounded-full text-white no-underline"><FaDownload /> 前往下載</Link>
+                    <a href={"/download/" + data.id} className="btn btn-primary w-full mt-2 sm:mt-0 sm:w-fit sm:rounded-full text-white no-underline"><FaDownload /> 前往下載</a>
                 </div>
             </div>
         </div>
