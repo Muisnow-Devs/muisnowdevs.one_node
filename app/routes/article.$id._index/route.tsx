@@ -41,7 +41,7 @@ async function getArticle(id: string) {
         throw new Response(null, { status: 404 });
     
     // get previous and next article
-    const previous = await db
+    const previousSQL = db
         .query
         .articles
         .findFirst({
@@ -53,7 +53,7 @@ async function getArticle(id: string) {
             }
         });
     
-    const next = await db
+    const nextSQL = db
         .query
         .articles
         .findFirst({
@@ -64,6 +64,8 @@ async function getArticle(id: string) {
                 title: true
             }
         });
+
+    const [previous, next] = await Promise.all([previousSQL, nextSQL]);
     
     return {
         ...response,
