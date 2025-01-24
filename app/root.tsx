@@ -40,7 +40,7 @@ export const meta: MetaFunction = ({ error }) => {
 };
 
 export function Copyright() {
-    return <div className="w-full h-screen relative bg-black">
+    return <div className="w-full h-screen relative bg-black p-5">
         <div className="absolute top-0 left-0 -z-50 -translate-y-10 bg-black w-full h-full"></div>
         <div className="w-full h-full grid place-content-center">
             <Logo width={256} className="mb-12" />

@@ -91,13 +91,13 @@ export default function Articles() {
     }
 
     return <div className="w-full min-h-screen">
-        <div className="w-full p-8 rounded-b-3xl shadow-lg sticky top-0 backdrop-blur-lg z-50">
+        <div className="w-full p-4 sm:p-8 rounded-b-3xl shadow-lg sticky top-0 backdrop-blur-lg z-50">
             <div className="w-full flex justify-center">
-                <div className="flex gap-10 w-full max-w-7xl items-center">
+                <div className="flex gap-5 sm:gap-10 w-full max-w-7xl items-center">
                     <div className="tooltip" data-tip="返回首頁">
                         <Link to={"/"} className="btn btn-square btn-outline h-full border-0"><FaHome className="text-4xl text-gray-500" /></Link>
                     </div>
-                    <h1 className="text-4xl font-black"><GradText>文章 Articles</GradText></h1>
+                    <h1 className="text-2xl sm:text-4xl font-black"><GradText>文章 Articles</GradText></h1>
                 </div>
             </div>
         </div>

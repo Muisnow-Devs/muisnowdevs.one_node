@@ -4,4 +4,4 @@ node_modules
 /build
 .env
 *.sql
-!/migration/*.sql
+!/migrations/*.sql

@@ -5,7 +5,7 @@ import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import directive from "remark-directive";
 import { classFormat } from "@/utils";
-import { FaArrowUp, FaCheck, FaCopy, FaLink } from "react-icons/fa";
+import { FaArrowUp, FaCheck, FaCopy, FaEnvelope, FaHashtag, FaLink } from "react-icons/fa";
 import React, { useState, ImgHTMLAttributes, AnchorHTMLAttributes, DetailedHTMLProps, PropsWithChildren, useEffect } from "react";
 import { Link } from "@remix-run/react";
 import { FaArrowUpRightFromSquare } from "react-icons/fa6";
@@ -13,7 +13,7 @@ import { visit } from "unist-util-visit";
 import type { Root } from "mdast";
 import DownloadComponent from "./download";
 
-function Code({ inline, className, children, ...props }: { inline?: boolean } & DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement>) {
+export function Code({ inline, className, children, ...props }: { inline?: boolean } & DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement>) {
     const [isClicked, setIsClicked] = useState(false);
     const match = /language-(\w+)/.exec(className || "");
 
@@ -57,7 +57,7 @@ function Code({ inline, className, children, ...props }: { inline?: boolean } & 
     );
 }
 
-function Img({ src, alt }: ImgHTMLAttributes<HTMLImageElement>) {
+export function Img({ src, alt }: ImgHTMLAttributes<HTMLImageElement>) {
     return <span>
         <img
             src={src}
@@ -69,14 +69,20 @@ function Img({ src, alt }: ImgHTMLAttributes<HTMLImageElement>) {
     </span>
 }
 
-function LinkComponent({ href, children }: AnchorHTMLAttributes<HTMLAnchorElement>) {
+export function LinkComponent({ href, children }: AnchorHTMLAttributes<HTMLAnchorElement>) {
     const isExternal = (href ?? "").startsWith("http");
+    const isHash = (href ?? "").startsWith("#");
+    const isMail = (href ?? "").startsWith("mailto");
+
     return <Link to={href ?? ""} className="text-blue-500 no-underline hover:underline" target={isExternal ? "_blank" : ""} rel={isExternal ? "noopener noreferrer" : ""}>
-        {children} {isExternal && <FaArrowUpRightFromSquare className="inline" />}
+        {isHash && <FaHashtag className="inline mr-1" />}
+        {isMail && <FaEnvelope className="inline mr-1" />}
+        {children}
+        {isExternal && <FaArrowUpRightFromSquare className="inline ml-1" />}
     </Link>
 }
 
-function CopiableTitle({ children }: PropsWithChildren) {
+export function CopiableTitle({ children }: PropsWithChildren) {
     const [isClicked, setIsClicked] = useState(false);
 
     function copy() {

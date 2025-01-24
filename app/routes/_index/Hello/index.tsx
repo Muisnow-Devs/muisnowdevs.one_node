@@ -21,7 +21,7 @@ export default function Home() {
                 />
             </div>
         </div>
-        <div className="mt-8 flex gap-2 lg:gap-5 items-center flex-col lg:flex-row">
+        <div className="mt-8 flex gap-2 lg:gap-5 lg:items-center flex-col lg:flex-row">
             {/* TODO: Make an about me page */}
             <LinkButton to={"/article"} icon={FaBook} className="bg-[#6f47ff] text-white">你所不知道的物語</LinkButton>
             <div className="text-xl text-gray-400 hidden lg:block">|</div>

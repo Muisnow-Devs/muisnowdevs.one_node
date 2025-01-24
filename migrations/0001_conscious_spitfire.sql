@@ -1,0 +1,1 @@
+ALTER TABLE `downloadable_file` ADD `description` text;

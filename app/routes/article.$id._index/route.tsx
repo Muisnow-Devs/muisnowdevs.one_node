@@ -3,7 +3,7 @@ import db from "@/db/client.server";
 import { asc, desc, eq, gt, lt } from "drizzle-orm";
 import invariant from "tiny-invariant";
 import { MetaFunction, useLoaderData } from "@remix-run/react";
-import MarkdownComponent from "./markdown";
+import MarkdownComponent from "@/components/markdown";
 import { BackToArticle } from "@/components/text";
 import { FaBookmark, FaClock, FaHashtag } from "react-icons/fa";
 import Header from "./header";
