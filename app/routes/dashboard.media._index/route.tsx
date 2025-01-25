@@ -128,8 +128,11 @@ function MediaCard(config: MediaCardArgs) {
 export default function DashboardMediaPage() {
     const data = useLoaderData<typeof loader>();
     const [page, setPage] = useState(0);
+    const [search, setSearch] = useState("");
     const [selected, setSelected] = useState<string[]>([]);
     const [isAllSelected, setIsAllSelected] = useState(false);
+
+    const searchData = search.length > 0 ? data.filter((item) => item.Key?.includes(search)) : data;
 
     function selectAll() {
         if (isAllSelected) {
@@ -154,15 +157,21 @@ export default function DashboardMediaPage() {
     return <div>
         <p>管理已上傳的媒體</p>
         <div className="border p-5 rounded-xl w-full">
-            <div className="flex gap-2">
-                <Link to="new" className="btn btn-primary w-fit"><FaUpload /> 上傳媒體</Link>
-                {selected.length > 0 && <div className="dropdown">
-                    <button className="btn" tabIndex={0}>批次操作 <FaArrowDown /></button>
-                    <ul className="dropdown-content menu bg-base-100 rounded-box z-[1] w-52 p-2 shadow flex flex-col gap-1 mt-2">
-                        <li><button>下載</button></li>
-                        <li><button className="hover:bg-error hover:text-white">刪除</button></li>
-                    </ul>
-                </div>}
+            <div className="flex justify-between md:flex-row flex-col gap-2">
+                <div className="flex gap-2">
+                    <Link to="new" className="btn btn-primary w-fit"><FaUpload /> 上傳媒體</Link>
+                    {selected.length > 0 && <div className="dropdown">
+                        <button className="btn" tabIndex={0}>批次操作 <FaArrowDown /></button>
+                        <ul className="dropdown-content menu bg-base-100 rounded-box z-[1] w-52 p-2 shadow flex flex-col gap-1 mt-2">
+                            <li><button>下載</button></li>
+                            <li><button className="hover:bg-error hover:text-white">刪除</button></li>
+                        </ul>
+                    </div>}
+                </div>
+                <div className="flex gap-2">
+                    <input type="text" placeholder="搜尋檔案" className="input input-bordered" value={search} onChange={(event) => setSearch(event.target.value)} />
+                    {search.length > 0 && <button className="btn" onClick={() => setSearch("")}>清除</button>}
+                </div>
             </div>
             <div className="w-full">
                 <div className="overflow-x-auto">
@@ -181,7 +190,7 @@ export default function DashboardMediaPage() {
                             </tr>
                         </thead>
                         <tbody>
-                            {data.slice(page * 10, (page + 1) * 10).map((item, index) => <MediaCard
+                            {searchData.slice(page * 10, (page + 1) * 10).map((item, index) => <MediaCard
                                 selected={selected.includes(item.Key || "")}
                                 onSelect={(selected) => select(item.Key || "", selected)}
                                 key={"item:" + index}
@@ -194,8 +203,8 @@ export default function DashboardMediaPage() {
 
                 <div className="mt-5 flex justify-between items-center">
                     <button className="btn" onClick={() => setPage(page - 1)} disabled={page === 0}>上一頁</button>
-                    <span>{page + 1} / {Math.ceil(data.length / LIMIT)}</span>
-                    <button className="btn" onClick={() => setPage(page + 1)} disabled={data.length <= (page + 1) * LIMIT}>下一頁</button>
+                    <span>{page + 1} / {Math.ceil(searchData.length / LIMIT)}</span>
+                    <button className="btn" onClick={() => setPage(page + 1)} disabled={searchData.length <= (page + 1) * LIMIT}>下一頁</button>
                 </div>
             </div>
         </div>
