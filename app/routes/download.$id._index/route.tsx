@@ -9,7 +9,7 @@ import { FaDownload, FaFile } from "react-icons/fa";
 import { humanFileSize } from "@/utils";
 import MakrdownComponent, { Code } from "@/components/markdown";
 import { FaTriangleExclamation } from "react-icons/fa6";
-import { getResourceSignedUrl } from "@/storage/aws.server";
+import { privateS3 } from "@/storage/aws.server";
 import { useEffect } from "react";
 import { downloadURI } from "@/utils.client";
 
@@ -62,7 +62,7 @@ export const action: ActionFunction = async ({ request, params }) => {
     if (!item)
         throw new Response(null, { status: 404 });
 
-    return getResourceSignedUrl(item.originalFilename, item.filename);
+    return privateS3.getResourceSignedUrl(item.originalFilename, item.filename);
 };
 
 export default function DownloadPage() {
