@@ -1,9 +1,11 @@
+import { MonoText } from "@/components/text";
 import { publicS3 } from "@/storage/aws.server";
 import { humanFileSize } from "@/utils";
+import { downloadURIWithBlob } from "@/utils.client";
 import { ActionFunction, MetaFunction } from "@remix-run/node";
 import { Link, useLoaderData } from "@remix-run/react";
 import { useEffect, useState } from "react";
-import { FaArrowDown, FaUpload } from "react-icons/fa";
+import { FaArrowDown, FaArrowLeft, FaArrowRight, FaUpload } from "react-icons/fa";
 import invariant from "tiny-invariant";
 
 const LIMIT = 10;
@@ -19,6 +21,7 @@ export const meta: MetaFunction = () => {
 };
 
 export async function loader() {
+    return publicS3.getResources();
     return [
     // test data
         {
@@ -72,7 +75,6 @@ export async function loader() {
             LastModified: new Date()
         },
     ]
-    return publicS3.getResources();
 }
 
 export const action: ActionFunction = async ({ request }) => {
@@ -82,9 +84,8 @@ export const action: ActionFunction = async ({ request }) => {
 
     const action = request.method;
 
-    if (action === "DELETE") {
-        await publicS3.deleteResource(id as string);
-    }
+    if (action === "DELETE")
+        return await publicS3.deleteResource(id as string).then(() => null);
 
     return null;
 };
@@ -119,7 +120,6 @@ function MediaCard(config: MediaCardArgs) {
         <td className="flex gap-2">
             <button className="btn btn-primary" onClick={open}>檢視</button>
             <button className="btn btn-neutral text-white" onClick={copyLink}>複製連結</button>
-            <button className="btn">編輯</button>
             <button className="btn hover:btn-error hover:text-white">刪除</button>
         </td>
     </tr>;
@@ -132,7 +132,9 @@ export default function DashboardMediaPage() {
     const [selected, setSelected] = useState<string[]>([]);
     const [isAllSelected, setIsAllSelected] = useState(false);
 
-    const searchData = search.length > 0 ? data.filter((item) => item.Key?.includes(search)) : data;
+    const searchData = search.length > 0
+        ? data.filter((item) => item.Key?.includes(search))
+        : data;
 
     function selectAll() {
         if (isAllSelected) {
@@ -147,6 +149,17 @@ export default function DashboardMediaPage() {
         setSelected((selected) => value ? [...selected, item] : selected.filter((i) => i !== item));
     }
 
+    function downloadSelected() {
+        if (selected.length === 0)
+            return;
+
+        console.log(selected);
+
+        for (const item of selected) {
+            downloadURIWithBlob(import.meta.env.VITE_PUBLIC_URL + item, item);
+        }
+    }
+
     useEffect(() => {
         if (selected.length === data.length)
             setIsAllSelected(true);
@@ -156,6 +169,9 @@ export default function DashboardMediaPage() {
 
     return <div>
         <p>管理已上傳的媒體</p>
+        <p className="alert alert-info text-white text-left">
+            <span>媒體端點為: <a href={import.meta.env.VITE_PUBLIC_URL}><MonoText className="break-all">{import.meta.env.VITE_PUBLIC_URL}</MonoText></a></span>
+        </p>
         <div className="border p-5 rounded-xl w-full">
             <div className="flex justify-between md:flex-row flex-col gap-2">
                 <div className="flex gap-2">
@@ -163,7 +179,7 @@ export default function DashboardMediaPage() {
                     {selected.length > 0 && <div className="dropdown">
                         <button className="btn" tabIndex={0}>批次操作 <FaArrowDown /></button>
                         <ul className="dropdown-content menu bg-base-100 rounded-box z-[1] w-52 p-2 shadow flex flex-col gap-1 mt-2">
-                            <li><button>下載</button></li>
+                            <li><button onClick={downloadSelected}>下載</button></li>
                             <li><button className="hover:bg-error hover:text-white">刪除</button></li>
                         </ul>
                     </div>}
@@ -190,11 +206,11 @@ export default function DashboardMediaPage() {
                             </tr>
                         </thead>
                         <tbody>
-                            {searchData.slice(page * 10, (page + 1) * 10).map((item, index) => <MediaCard
+                            {searchData.slice(page * 10, (page + 1) * 10).map((item) => <MediaCard
                                 selected={selected.includes(item.Key || "")}
                                 onSelect={(selected) => select(item.Key || "", selected)}
-                                key={"item:" + index}
-                                filename={item.Key || "N"}
+                                key={"item:" + item.Key}
+                                filename={item.Key || "unknown"}
                                 size={item.Size || 0}
                                 createAt={item.LastModified || new Date()} />)}
                         </tbody>
@@ -202,9 +218,9 @@ export default function DashboardMediaPage() {
                 </div>
 
                 <div className="mt-5 flex justify-between items-center">
-                    <button className="btn" onClick={() => setPage(page - 1)} disabled={page === 0}>上一頁</button>
+                    <button className="btn" onClick={() => setPage(page - 1)} disabled={page === 0}><FaArrowLeft /> 上一頁</button>
                     <span>{page + 1} / {Math.ceil(searchData.length / LIMIT)}</span>
-                    <button className="btn" onClick={() => setPage(page + 1)} disabled={searchData.length <= (page + 1) * LIMIT}>下一頁</button>
+                    <button className="btn" onClick={() => setPage(page + 1)} disabled={searchData.length <= (page + 1) * LIMIT}>下一頁 <FaArrowRight /></button>
                 </div>
             </div>
         </div>

@@ -96,10 +96,11 @@ class S3Actions {
     }
 
     // Multipart Upload
-    async createResourceMultipartUpload(file: string) {
+    async createResourceMultipartUpload(file: string, contentType: string = "application/octet-stream") {
         return await this.client.send(new CreateMultipartUploadCommand({
             Bucket: this.bucket,
-            Key: file
+            Key: file,
+            ContentType: contentType
         }));
     }
 
@@ -108,7 +109,7 @@ class S3Actions {
             Bucket: this.bucket,
             Key: file,
             PartNumber: partNumber,
-            UploadId: uploadId
+            UploadId: uploadId,
         }), { expiresIn: EXPIRED_IN });
     }
 

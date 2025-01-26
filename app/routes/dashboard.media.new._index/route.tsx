@@ -1,9 +1,19 @@
 import { humanFileSize } from "@/utils";
-import { Link, useFetcher } from "@remix-run/react";
+import { Link, MetaFunction, useFetcher } from "@remix-run/react";
 import { useState } from "react";
 import { FaUpload } from "react-icons/fa";
 import { FaX } from "react-icons/fa6";
 import { MdFileUpload, MdRestartAlt } from "react-icons/md";
+
+export const meta: MetaFunction = () => {
+    return [
+        { title: "上傳媒體 - Muisnow Devs" },
+        {
+            name: "description",
+            content: "上傳你的媒體資源至伺服器",
+        },
+    ];
+};
 
 interface UploadFileArgs {
     setFile: (file: File) => void;
@@ -43,6 +53,7 @@ function UploadFile(config: UploadFileArgs) {
 interface FileSelectedArgs {
     filename: string,
     size: number,
+    mimeType: string,
     onReselect: () => void
 }
 
@@ -54,6 +65,8 @@ function FileSelected(config: FileSelectedArgs) {
                 <div className="sm:ml-5 min-w-0">
                     <h3 className="text-xl truncate font-bold">{config.filename}</h3>
                     <p className="mb-0 text-gray-500">檔案大小: {humanFileSize(config.size)}</p>
+                    <p className="mb-0 text-gray-500">檔案類型: {config.mimeType}</p>
+
                 </div>
             </div>
             <div className="grid sm:place-content-center min-w-fit mt-4 sm:mt-0 sm:ml-5">
@@ -72,7 +85,7 @@ export default function DashboardMediaNewIndex() {
         <p className="alert bg-yellow-300 text-left">請注意！檔案上傳後會生成新的檔案名稱，您無法使用原始檔案名稱作為讀取路徑。</p>
 
         {!file && <UploadFile setFile={setFile} />}
-        {file && <FileSelected filename={file.name} size={file.size} onReselect={() => setFile(null)} />}
+        {file && <FileSelected filename={file.name} size={file.size} mimeType={file.type} onReselect={() => setFile(null)} />}
         <div className="mt-5 flex gap-2 flex-col-reverse sm:flex-row justify-between">
             <Link to={"/dashboard/media"} className="btn btn-error text-white"><FaX /> 取消</Link>
             {file && <button className="btn btn-primary w-full sm:w-fit text-white" disabled={fetcher.state !== "idle"}><FaUpload /> 上傳</button>}

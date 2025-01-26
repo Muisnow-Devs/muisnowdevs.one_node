@@ -1,8 +1,6 @@
 import db from "@/db/client.server";
-import { getResourceMimeType, getResourceSize } from "@/storage/aws.server";
+import { privateS3 } from "@/storage/aws.server";
 import { and, eq } from "drizzle-orm";
-
-
 
 export async function getItem(id: string) {
     const data = await db
@@ -25,8 +23,8 @@ export async function getItem(id: string) {
     if (!data)
         return null;
 
-    data.fileSize = data.fileSize || await getResourceSize(data.originalFilename);
-    data.fileType = data.fileType || (await getResourceMimeType(data.originalFilename))?.mime || "unknown";
+    data.fileSize = data.fileSize || await privateS3.getResourceSize(data.originalFilename);
+    data.fileType = data.fileType || (await privateS3.getResourceMimeType(data.originalFilename))?.mime || "unknown";
 
     return { ...data, originalFilename: undefined };
 }
