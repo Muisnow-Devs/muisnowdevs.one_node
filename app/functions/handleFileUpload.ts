@@ -4,3 +4,15 @@ export enum UploadStatus {
     UPLOADED = 'UPLOADED',
     FAILED = 'FAILED',
 }
+
+export interface UploadPart {
+    ETag: string;
+    PartNumber: number;
+}
+
+export interface ServerUploadResponse {
+    resourceid: number,
+    uploadid: string,
+    fileid: string,
+    validate: string,
+}
