@@ -6,7 +6,6 @@ import { FaUpload } from "react-icons/fa";
 import { FaX } from "react-icons/fa6";
 
 interface SelectFileSectionArgs {
-    state: UploadStatus;
     setState: (state: UploadStatus) => void;
     file: File | null;
     setFile: (file: File | null) => void;
@@ -17,7 +16,7 @@ export default function SelectFileSection(config: SelectFileSectionArgs) {
     return <div>
         <p className="alert bg-yellow-300 text-left">請注意！檔案上傳後會生成新的檔案名稱，您無法使用原始檔案名稱作為讀取路徑。</p>
 
-        {config.state === UploadStatus.SELECTING && <FileUploadComponent file={config.file} setFile={config.setFile} />}
+        <FileUploadComponent file={config.file} setFile={config.setFile} />
 
         <BottomAction>
             <Link to={"/dashboard/media"} className="btn btn-error text-white"><FaX /> 取消</Link>

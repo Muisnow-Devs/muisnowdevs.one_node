@@ -3,6 +3,7 @@ import { MetaFunction } from "@remix-run/react";
 import { useReducer } from "react";
 import SelectFileSection from "./selectFile";
 import reducer, { ActionType } from "./reducer";
+import UploadingSection from "./uploading";
 
 export const meta: MetaFunction = () => {
     return [
@@ -26,9 +27,12 @@ export default function DashboardMediaNewIndex() {
         <p>新增媒體</p>
 
         {state.state === UploadStatus.SELECTING && <SelectFileSection
-            state={state.state}
             setState={(state) => dispatch({ type: ActionType.SET_STATE, payload: state })}
             file={state.file}
             setFile={(file) => dispatch({ type: ActionType.SET_FILE, payload: file })} />}
+        {state.state === UploadStatus.UPLOADING && <UploadingSection
+            file={state.file}
+            onSuccessfulChunks={(chunks) => dispatch({ type: ActionType.ADD_UPLOAD_SUCCESSFUL_CHUNK, payload: chunks })}
+            setState={(state) => dispatch({ type: ActionType.SET_STATE, payload: state })} />}
     </div>;
 }

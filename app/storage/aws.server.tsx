@@ -22,7 +22,7 @@ if (!process.env.S3_PRIVATE_BUCKET || !process.env.S3_PUBLIC_BUCKET) {
 const EXPIRED_IN = 3600;
 const REDIS_EXPIRED_IN = 604800;
 
-class S3Actions {
+export class S3Actions {
     constructor(private readonly client: S3Client,
                 private readonly bucket: string) { }
 
