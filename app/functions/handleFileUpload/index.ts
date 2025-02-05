@@ -11,7 +11,7 @@ export interface UploadPart {
 }
 
 export interface ServerUploadResponse {
-    resourceid: number,
-    session: string,
+    resourceId: string,
+    uploadId: string,
     validate: string,
 }
