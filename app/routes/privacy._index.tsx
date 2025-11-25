@@ -1,77 +1,130 @@
-import { MetaFunction } from "@remix-run/node";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
+import type { ChangeEvent } from "react";
+import { useLoaderData, useSearchParams } from "react-router";
+import Markdown from "@/components/markdown";
+import { loadPrivacyPolicy } from "@/models/privacy.server";
 
-export const meta: MetaFunction = () => {
+function resolveLocaleFromHeader(header: string | null) {
+    if (!header) return undefined;
+
+    for (const segment of header.split(",")) {
+        const [language] = segment.trim().split(";");
+        if (language) return language;
+    }
+
+    return undefined;
+}
+
+export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
+    const isEnglish = loaderData?.locale.startsWith("en");
+
     return [
-        { title: "隱私權政策 - Muisnow Devs" },
+        {
+            title: isEnglish
+                ? "Privacy Policy - Muisnow Devs"
+                : "隱私權政策 - Muisnow Devs",
+        },
         {
             name: "description",
-            content: "Muisnow Devs 的隱私權政策",
+            content: isEnglish
+                ? "Muisnow Devs privacy policy."
+                : "Muisnow Devs 的隱私權政策",
         },
     ];
 };
 
+export async function loader({ request }: LoaderFunctionArgs) {
+    const url = new URL(request.url);
+    const queryLocale = url.searchParams.get("lang");
+    const queryVersion = url.searchParams.get("version");
+    const headerLocale = resolveLocaleFromHeader(
+        request.headers.get("accept-language")
+    );
+    const preferredLocale = queryLocale ?? headerLocale ?? undefined;
+
+    try {
+        const policy = await loadPrivacyPolicy({
+            locale: preferredLocale,
+            version: queryVersion,
+        });
+        return policy;
+    } catch (error) {
+        console.error("Failed to load privacy policy:", error);
+        throw new Response("Privacy policy not found", { status: 404 });
+    }
+}
+
 export default function PrivacyIndex() {
-    return <div className="min-h-screen w-full grid place-items-center p-12">
-        <div className="max-w-7xl prose prose-lg">
-            <h1>Muisnow Devs 隱私權政策</h1>
-            <p>歡迎使用 Muisnow Devs 的服務。我們重視您的隱私，並致力於保護您的個人資訊。本隱私權政策說明我們如何收集、使用及保護您提供的資訊。</p>
+    const data = useLoaderData<typeof loader>();
+    const [searchParams, setSearchParams] = useSearchParams();
+    const currentLang = searchParams.get("lang") ?? undefined;
+    const versionOptions = data.availableVersions;
 
-            <h2>壹、定義</h2>
-            <p>本隱私權政策中所使用的名詞定義如下：</p>
-            <ul>
-                <li>「Muisnow Devs」指的是 Muisnow Devs 網站及其服務。</li>
-                <li>「我們」、「我們的」指的是 Muisnow Devs。</li>
-                <li>「您」、「您的」指的是使用或是註冊帳號於 Muisnow Devs 的使用者。</li>
-            </ul>
+    function handleVersionChange(event: ChangeEvent<HTMLSelectElement>) {
+        const selectedVersion = event.target.value;
+        const newSearchParams = new URLSearchParams(searchParams.toString());
+        newSearchParams.set("version", selectedVersion);
+        setSearchParams(newSearchParams);
+    }
 
-            <h2>貳、資料的蒐集</h2>
-            <p>我們不會主動收集您的個人資訊，除非您自行提供。您可以選擇提供以下資訊：</p>
-            <ul>
-                <li>使用者名稱</li>
-                <li>您的電子郵件地址</li>
-                <li>您的帳號資訊</li>
-                <li>應用程式的錯誤日誌</li>
-            </ul>
-            <p>若您與我們伺服器進行通訊，我們將自動收集以下資訊：</p>
-            <ul>
-                <li>您的 IP 位址</li>
-                <li>裝置的識別資訊</li>
-                <li>訪問時間</li>
-            </ul>
+    function handleLocaleChange(event: ChangeEvent<HTMLSelectElement>) {
+        const selectedLocale = event.target.value;
+        const newSearchParams = new URLSearchParams(searchParams.toString());
+        newSearchParams.set("lang", selectedLocale);
+        setSearchParams(newSearchParams);
+    }
 
-            <h2>參、資料的使用</h2>
-            <p>我們僅在以下情況下使用您提供的資訊：</p>
-            <ul>
-                <li>提供和改善我們的服務</li>
-                <li>回應您的查詢或要求</li>
-                <li>處理錯誤報告以提升您的使用體驗</li>
-                <li>遵守法律義務</li>
-            </ul>
+    function formatVersionLabel(version: string, isLatest: boolean) {
+        if (version.length === 8) {
+            const year = version.slice(0, 4);
+            const month = version.slice(4, 6);
+            const day = version.slice(6, 8);
+            const formatted = `${year}-${month}-${day}`;
+            return isLatest ? `${formatted} (Latest)` : formatted;
+        }
 
-            <h2>肆、資料的分享</h2>
-            <p>除非取得您的明確同意，我們不會與第三方分享您的個人資訊。所有資訊的分享都將遵循您的授權。除非以下情況：</p>
-            <ul>
-                <li>遵守法律法規</li>
-                <li>司法機關要求</li>
-            </ul>
+        return isLatest ? `${version} (Latest)` : version;
+    }
 
-            <h2>伍、資訊的安全</h2>
-            <p>我們將採取適當的技術措施來保護您的個人資訊，但無法保證絕對的安全性。我們將盡力保護您的資訊，但無法保證絕對的安全性。</p>
+    return (
+        <div className="min-h-screen w-full grid place-items-center p-12">
+            <div className="max-w-7xl w-full">
+                <div className="mb-6 flex flex-wrap items-center gap-3">
+                    {currentLang ? (
+                        <input type="hidden" name="lang" value={currentLang} />
+                    ) : null}
+                    <label
+                        htmlFor="policy-version"
+                        className="text-sm font-medium text-neutral-600"
+                    >
+                        Policy version
+                    </label>
+                    <select
+                        defaultValue={data.version}
+                        onChange={handleVersionChange}
+                        className="select"
+                    >
+                        {versionOptions.map((option) => (
+                            <option key={option.version} value={option.version}>
+                                {formatVersionLabel(
+                                    option.version,
+                                    option.isLatest
+                                )}
+                            </option>
+                        ))}
+                    </select>
+                    <select
+                        defaultValue={currentLang ?? data.locale}
+                        className="select"
+                        onChange={handleLocaleChange}
+                    >
+                        <option value="en">English</option>
+                        <option value="zh">正體中文 (original)</option>
+                    </select>
+                </div>
 
-            <h2>陸、使用者權利</h2>
-            <p>您有權要求查詢、更正、刪除您的個人資訊。若您有任何疑問或是需要協助，請聯絡我們。</p>
-
-            <h2>柒、隱私權政策的變更</h2>
-            <p>我們保留修改本隱私權政策的權利。任何變更將在本頁面上公告。請定期查閱以了解最新資訊。</p>
-
-            <h2>捌、聯絡我們</h2>
-            <p>若您有任何問題或疑慮，請透過以下方式聯絡我們：</p>
-            <ul>
-                <li>電子郵件： <a href="mailto:me@muisnowdevs.one">me@muisnowdevs.one</a></li>
-            </ul>
-
-            <h2>玖、生效日期</h2>
-            <p>本隱私權政策自 2025 年 3 月 1 日生效。</p>
+                <Markdown>{data.content}</Markdown>
+            </div>
         </div>
-    </div>;
+    );
 }

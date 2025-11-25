@@ -1,10 +1,17 @@
-import { MonoText } from "@/components/text";
+import { MonoText, Timestamp } from "@/components/text";
 import { publicS3 } from "@/storage/aws.server";
 import { humanFileSize } from "@/utils";
 import { downloadURIWithBlob } from "@/utils.client";
-import { ActionFunction, MetaFunction } from "@remix-run/node";
-import { Link, useLoaderData } from "@remix-run/react";
-import { useEffect, useState } from "react";
+import {
+    Link,
+    useFetcher,
+    useLoaderData,
+    useSearchParams,
+    ActionFunctionArgs,
+    LoaderFunctionArgs,
+    MetaFunction,
+} from "react-router";
+import { useEffect, useMemo, useState } from "react";
 import { FaArrowDown, FaArrowLeft, FaArrowRight, FaUpload } from "react-icons/fa";
 import invariant from "tiny-invariant";
 
@@ -20,75 +27,25 @@ export const meta: MetaFunction = () => {
     ];
 };
 
-export async function loader() {
-    return publicS3.getResources();
-    return [
-    // test data
-        {
-            Key: "test.jpg",
-            Size: 1024,
-            LastModified: new Date()
-        },
-        {
-            Key: "test2.jpg",
-            Size: 2048,
-            LastModified: new Date()
-        },
-        {
-            Key: "test3.jpg",
-            Size: 4096,
-            LastModified: new Date()
-        },
-        {
-            Key: "test4.jpg",
-            Size: 8192,
-            LastModified: new Date()
-        },
-        {
-            Key: "test5.jpg",
-            Size: 16384,
-            LastModified: new Date()
-        },
-        {
-            Key: "test6.jpg",
-            Size: 32768,
-            LastModified: new Date()
-        },
-        {
-            Key: "test7.jpg",
-            Size: 65536,
-            LastModified: new Date()
-        },
-        {
-            Key: "test8.jpg",
-            Size: 131072,
-            LastModified: new Date()
-        },
-        {
-            Key: "test9.jpg",
-            Size: 262144,
-            LastModified: new Date()
-        },
-        {
-            Key: "test10.jpg",
-            Size: 524288,
-            LastModified: new Date()
-        },
-    ]
+export async function loader({ request }: LoaderFunctionArgs) {
+    const url = new URL(request.url);
+    const continuationToken = url.searchParams.get("continuationToken") || undefined;
+
+    return publicS3.getResources(continuationToken);
 }
 
-export const action: ActionFunction = async ({ request }) => {
+export async function action({ request }: ActionFunctionArgs) {
     const body = await request.formData();
     const id = body.get("id");
     invariant(id, "id is required");
 
-    const action = request.method;
+    const method = request.method;
 
-    if (action === "DELETE")
+    if (method === "DELETE")
         return await publicS3.deleteResource(id as string).then(() => null);
 
     return null;
-};
+}
 
 interface MediaCardArgs {
     filename: string;
@@ -96,12 +53,20 @@ interface MediaCardArgs {
     createAt: Date;
     selected: boolean;
     onSelect: (selected: boolean) => void;
+    onDelete: () => void;
 }
 
 function MediaCard(config: MediaCardArgs) {
     function copyLink() {
         navigator.clipboard.writeText(import.meta.env.VITE_PUBLIC_URL + config.filename);
         alert("已複製連結到剪貼簿");
+    }
+
+    function mediaDelete() {
+        if (!confirm("確定要刪除此檔案嗎？"))
+            return;
+
+        config.onDelete();
     }
 
     function open() {
@@ -116,25 +81,31 @@ function MediaCard(config: MediaCardArgs) {
         </td>
         <td className="flex-auto">{config.filename}</td>
         <td>{humanFileSize(config.size)}</td>
-        <td>{config.createAt.toLocaleString()}</td>
+        <td><Timestamp time={config.createAt} /></td>
         <td className="flex gap-2">
             <button className="btn btn-primary" onClick={open}>檢視</button>
             <button className="btn btn-neutral text-white" onClick={copyLink}>複製連結</button>
-            <button className="btn hover:btn-error hover:text-white">刪除</button>
+            <button className="btn hover:btn-error hover:text-white" onClick={mediaDelete}>刪除</button>
         </td>
     </tr>;
 }
 
 export default function DashboardMediaPage() {
     const data = useLoaderData<typeof loader>();
+    const [continuationToken, setContinuationToken] = useState(data.continuationToken);
+    const [resources, setResources] = useState(data.content || []);
+    const [, setSearchParams] = useSearchParams();
     const [page, setPage] = useState(0);
     const [search, setSearch] = useState("");
     const [selected, setSelected] = useState<string[]>([]);
     const [isAllSelected, setIsAllSelected] = useState(false);
+    const fetcher = useFetcher<typeof action>();
 
-    const searchData = search.length > 0
-        ? data.filter((item) => item.Key?.includes(search))
-        : data;
+    const searchData = useMemo(() => {
+        return search.length > 0
+            ? resources?.filter((item) => item.Key?.includes(search)) || []
+            : resources || [];
+    }, [search, resources]);
 
     function selectAll() {
         if (isAllSelected) {
@@ -142,7 +113,7 @@ export default function DashboardMediaPage() {
             return;
         }
 
-        setSelected(data.map((item) => item.Key || ""));
+        setSelected((resources).map((item) => item.Key || ""));
     }
 
     function select(item: string, value: boolean) {
@@ -160,12 +131,38 @@ export default function DashboardMediaPage() {
         }
     }
 
+    function deleteResources(resources: string[]) {
+        for (const item of resources) {
+            fetcher.submit({ id: item }, { method: "DELETE" });
+        }
+    }
+
+    function deleteSelected() {
+        if (!confirm(`確定要刪除選取的 ${selected.length} 個檔案嗎？`))
+            return;
+
+        deleteResources(selected);
+    }
+
     useEffect(() => {
-        if (selected.length === data.length)
+        if (selected.length === resources.length)
             setIsAllSelected(true);
         else
             setIsAllSelected(false);
-    }, [selected, data]);
+    }, [selected, resources.length]);
+
+    useEffect(() => {
+        // check if is at last second page
+        if (searchData.length <= (page + 1) * LIMIT && data.continuationToken)
+            setSearchParams({ continuationToken: data.continuationToken });
+    }, [data.continuationToken, page, searchData, setSearchParams]);
+
+    useEffect(() => {
+        if (data.continuationToken === continuationToken)
+            return;
+        setContinuationToken(data.continuationToken);
+        setResources((res) => [...res, ...(data.content || [])]);
+    }, [continuationToken, data])
 
     return <div>
         <p>管理已上傳的媒體</p>
@@ -178,9 +175,9 @@ export default function DashboardMediaPage() {
                     <Link to="new" className="btn btn-primary w-fit"><FaUpload /> 上傳媒體</Link>
                     {selected.length > 0 && <div className="dropdown">
                         <button className="btn" tabIndex={0}>批次操作 <FaArrowDown /></button>
-                        <ul className="dropdown-content menu bg-base-100 rounded-box z-[1] w-52 p-2 shadow flex flex-col gap-1 mt-2">
+                        <ul className="dropdown-content menu bg-base-100 rounded-box z-1 w-52 p-2 shadow-sm flex flex-col gap-1 mt-2">
                             <li><button onClick={downloadSelected}>下載</button></li>
-                            <li><button className="hover:bg-error hover:text-white">刪除</button></li>
+                            <li><button className="hover:bg-error hover:text-white" onClick={deleteSelected}>刪除</button></li>
                         </ul>
                     </div>}
                 </div>
@@ -209,6 +206,7 @@ export default function DashboardMediaPage() {
                             {searchData.slice(page * 10, (page + 1) * 10).map((item) => <MediaCard
                                 selected={selected.includes(item.Key || "")}
                                 onSelect={(selected) => select(item.Key || "", selected)}
+                                onDelete={() => deleteResources([item.Key || ""])}
                                 key={"item:" + item.Key}
                                 filename={item.Key || "unknown"}
                                 size={item.Size || 0}

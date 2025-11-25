@@ -1,4 +1,4 @@
-import { Outlet } from "@remix-run/react";
+import { Outlet } from "react-router";
 
 export default function DashboardLayout() {
     return <div className="w-full min-h-screen flex justify-center p-5 overflow-auto">

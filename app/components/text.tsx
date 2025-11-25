@@ -1,4 +1,4 @@
-import { Link } from "@remix-run/react";
+import { Link } from "react-router";
 import { FaArrowLeft, FaHome } from "react-icons/fa";
 import { PropsWithChildren } from "react";
 import { IconType } from "react-icons";
@@ -79,3 +79,4 @@ export const BackToArticle = () => <LinkWithIcon to={"/article"} icon={FaArrowLe
 
 export interface HilightsArgs extends PropsWithChildren { }
 export const Hilights = (configs: HilightsArgs) => <span className="bg-yellow-200 font-bold">{configs.children}</span>;
+export const Timestamp = ({ time }: { time: Date }) => <span suppressHydrationWarning>{time.toLocaleString()}</span>

@@ -39,7 +39,7 @@ export default function Home() {
                 <ProfileIconLink name="YouTube" color="red" icon={FaYoutube} link="https://www.youtube.com/@muisnow" />
                 <ProfileIconLink name="GitHub" icon={FaGithub} link="https://github.com/000hen" />
                 <ProfileIconLink name="Threads" icon={FaThreads} link="https://www.threads.net/@chenkuiheng" />
-                <ProfileIconLink name="Buy Me a Coffee" color="yellow" icon={FaCoffee} link="hhttps://buymeacoffee.com/muisnow" />
+                <ProfileIconLink name="Buy Me a Coffee" color="yellow" icon={FaCoffee} link="https://buymeacoffee.com/muisnow" />
             </div>
         </div>
     </div>

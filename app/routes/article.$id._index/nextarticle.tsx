@@ -1,5 +1,5 @@
 import { classFormat } from "@/utils";
-import { Link } from "@remix-run/react";
+import { Link } from "react-router";
 import { FaArrowLeft, FaArrowRight } from "react-icons/fa";
 
 interface NextArticleComponentArgs {

@@ -3,9 +3,6 @@ import plugin from "tailwindcss/plugin";
 
 export default {
   content: ["./app/**/{**,.client,.server}/**/*.{js,jsx,ts,tsx}"],
-  daisyui: {
-    themes: ['light']
-  },
   theme: {
     extend: {
       fontFamily: {
@@ -46,7 +43,6 @@ export default {
     },
   },
   plugins: [
-    require("daisyui"),
     require('@tailwindcss/typography'),
     plugin(function ({ matchUtilities, theme }) {
       matchUtilities(

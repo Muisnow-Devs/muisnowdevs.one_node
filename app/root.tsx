@@ -7,8 +7,8 @@ import {
     Scripts,
     ScrollRestoration,
     useRouteError,
-} from "@remix-run/react";
-import type { LinksFunction } from "@remix-run/node";
+} from "react-router";
+import type { LinksFunction } from "react-router";
 import { BackToHome, GradText } from "./components/text";
 import Logo from "@/components/logos/main.svg?react";
 

@@ -1,9 +1,10 @@
 import { UploadStatus } from "@/functions/handleFileUpload";
-import { MetaFunction } from "@remix-run/react";
+import { MetaFunction , ActionFunctionArgs } from "react-router";
 import { useReducer } from "react";
 import SelectFileSection from "./selectFile";
 import reducer, { ActionType } from "./reducer";
 import UploadingSection from "./uploading";
+import invariant from "tiny-invariant";
 
 export const meta: MetaFunction = () => {
     return [
@@ -14,6 +15,14 @@ export const meta: MetaFunction = () => {
         },
     ];
 };
+
+export async function action({ request }: ActionFunctionArgs) {
+    const body = await request.formData();
+    const ac = body.get("action");
+    invariant(ac, "action is required");
+
+    // const uploadAction = Number(ac) as unknown as UploadStatus;
+}
 
 export default function DashboardMediaNewIndex() {
     const [state, dispatch] = useReducer(reducer, {

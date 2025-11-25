@@ -19,7 +19,7 @@ function UploadFile(config: UploadFileArgs) {
         <div className="rounded-lg h-96 bg-gray-100 p-10 border-2 border-dashed border-gray-400 hover:bg-gray-200 cursor-pointer transition-all grid place-content-center">
             <div className="text-4xl grid place-content-center relative">
                 <MdFileUpload />
-                <div className="absolute top-0 left-0 right-0 bottom-0 grid place-content-center animate-ping blur-sm m-5">
+                <div className="absolute top-0 left-0 right-0 bottom-0 grid place-content-center animate-ping blur-xs m-5">
                     <MdFileUpload />
                 </div>
             </div>

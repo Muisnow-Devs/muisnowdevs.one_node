@@ -79,13 +79,19 @@ export class S3Actions {
         return await fileTypeFromBuffer(await data.Body.transformToByteArray());
     }
 
-    async getResources() {
+    async getResources(continuationToken?: string) {
         const data = await this.client.send(new ListObjectsV2Command({
             Bucket: this.bucket,
-            Delimiter: "/"
+            Delimiter: "/",
+            ContinuationToken: continuationToken,
+            MaxKeys: 100,
         }));
 
-        return data.Contents || [];
+        return {
+            content: data.Contents,
+            isTruncated: data.IsTruncated,
+            continuationToken: data.NextContinuationToken,
+        };
     }
 
     async deleteResource(file: string) {

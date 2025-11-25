@@ -1,7 +1,7 @@
 import BottomAction from "@/components/bottomAction";
 import FileUploadComponent from "@/components/upload";
 import { UploadStatus } from "@/functions/handleFileUpload";
-import { Link } from "@remix-run/react";
+import { Link } from "react-router";
 import { FaUpload } from "react-icons/fa";
 import { FaX } from "react-icons/fa6";
 

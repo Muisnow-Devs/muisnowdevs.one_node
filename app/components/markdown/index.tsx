@@ -7,7 +7,7 @@ import directive from "remark-directive";
 import { classFormat } from "@/utils";
 import { FaArrowUp, FaCheck, FaCopy, FaEnvelope, FaHashtag, FaLink } from "react-icons/fa";
 import React, { useState, ImgHTMLAttributes, AnchorHTMLAttributes, DetailedHTMLProps, PropsWithChildren, useEffect } from "react";
-import { Link } from "@remix-run/react";
+import { Link } from "react-router";
 import { FaArrowUpRightFromSquare } from "react-icons/fa6";
 import { visit } from "unist-util-visit";
 import type { Root } from "mdast";
@@ -40,8 +40,8 @@ export function Code({ inline, className, children, ...props }: { inline?: boole
 
         <SyntaxHighlighter
             className={classFormat([
-                "!rounded-none !mt-0 !mb-0",
-                isPlain && "!rounded-b-xl",
+                "rounded-none! mt-0! mb-0!",
+                isPlain && "rounded-b-xl!",
             ])}
             // @ts-expect-error The type of style is the same as the style of SyntaxHighlighter.
             style={atomDark}
@@ -95,16 +95,18 @@ export function CopiableTitle({ children }: PropsWithChildren) {
             setTimeout(() => setIsClicked(false), 1000);
     }, [isClicked]);
 
-    return <h1 id={String(children).replace(/\s/g, "-").toLowerCase()} className="group flex">
-        {!isClicked && <FaLink className="inline-block invisible group-hover:visible group-hover:mr-2 transition-all w-0 group-hover:w-6" />}
-        {isClicked && <FaCheck className="inline-block invisible group-hover:visible group-hover:mr-2 transition-all w-0 group-hover:w-6" />}
-        <button
-            className="group-hover:text-blue-500 transition-all tooltip text-start"
-            data-tip="複製連結"
-            onClick={copy}>
-            # {children}
-        </button>
-    </h1>
+    return (
+        <h1 id={String(children).replace(/\s/g, "-").toLowerCase()} className="group flex">
+            {!isClicked && <FaLink className="inline-block invisible group-hover:visible group-hover:mr-2 transition-all w-0 group-hover:w-6" />}
+            {isClicked && <FaCheck className="inline-block invisible group-hover:visible group-hover:mr-2 transition-all w-0 group-hover:w-6" />}
+            <button
+                className="group-hover:text-blue-500 transition-all tooltip text-start"
+                data-tip="複製連結"
+                onClick={copy}>
+                # {children}
+            </button>
+        </h1>
+    );
 }
 
 function reactMarkdownRemarkDirective() {

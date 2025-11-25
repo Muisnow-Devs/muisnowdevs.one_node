@@ -1,5 +1,6 @@
+import { Timestamp } from "@/components/text";
 import { classFormat } from "@/utils";
-import { Link } from "@remix-run/react";
+import { Link } from "react-router";
 
 interface ArticleBoxComonentArgs {
     id: number;
@@ -14,8 +15,8 @@ export default function ArticleBoxComponent(configs: ArticleBoxComonentArgs) {
         "active:shadow-2xl active:scale-95 active:bg-gray-100"
     ])}>
         <div>
-            <h1 className="text-4xl font-black text-black break-all leading-[3rem]">{configs.title}</h1>
-            <span className="block text-gray-500 mt-2">{configs.createdAt.toLocaleString()}</span>
+            <h1 className="text-4xl font-black text-black break-all leading-12">{configs.title}</h1>
+            <span className="block text-gray-500 mt-2"><Timestamp time={configs.createdAt} /></span>
         </div>
         <div className="w-full border mt-2"></div>
         <p className="p-4 text-gray-700">{configs.description}</p>

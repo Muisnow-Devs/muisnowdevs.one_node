@@ -1,8 +1,13 @@
 import { GradText } from "@/components/text";
-import { LoaderFunctionArgs } from "@remix-run/node";
 import db from "@/db/client.server";
 import { desc, eq } from "drizzle-orm";
-import { Link, MetaFunction, useFetcher, useLoaderData } from "@remix-run/react";
+import {
+    Link,
+    MetaFunction,
+    useFetcher,
+    useLoaderData,
+    LoaderFunctionArgs,
+} from "react-router";
 import { useEffect, useState } from "react";
 import ArticleBoxComponent from "./articlebox";
 import { FaHome } from "react-icons/fa";

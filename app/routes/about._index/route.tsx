@@ -1,6 +1,6 @@
 import { GradText, Hilights } from "@/components/text";
 import { classFormat } from "@/utils";
-import { Link, MetaFunction } from "@remix-run/react";
+import { Link, MetaFunction } from "react-router";
 import { PropsWithChildren } from "react";
 import { FaQuoteLeft } from "react-icons/fa";
 import { QuoteEffect } from "./effect";
@@ -44,7 +44,7 @@ export default function AboutPage() {
                         </p>
                     </Block>
 
-                    <Block className="!p-12 col-span-3 lg:col-span-2">
+                    <Block className="p-12! col-span-3 lg:col-span-2">
                         <div className="text-4xl mb-5 text-gray-400"><FaQuoteLeft /></div>
                         <p className="text-2xl">
                             <QuoteEffect text="所謂的人生，只不過就是個有限的探索，既然無法知曉其結局，那就當作是一場豪賭吧！" />

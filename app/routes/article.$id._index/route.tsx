@@ -1,10 +1,9 @@
-import { LoaderFunctionArgs } from "@remix-run/node";
 import db from "@/db/client.server";
 import { and, asc, desc, eq, gt, lt } from "drizzle-orm";
 import invariant from "tiny-invariant";
-import { MetaFunction, useLoaderData } from "@remix-run/react";
+import { MetaFunction, useLoaderData, LoaderFunctionArgs } from "react-router";
 import MarkdownComponent from "@/components/markdown";
-import { BackToArticle } from "@/components/text";
+import { BackToArticle, Timestamp } from "@/components/text";
 import { FaBookmark, FaClock, FaHashtag } from "react-icons/fa";
 import Header from "./header";
 import { useRef } from "react";
@@ -101,7 +100,7 @@ export default function ArticlePage() {
                         <h1 className="text-6xl font-bold mt-8">{data.title}</h1>
 
                         <div className="mt-8 font-bold">
-                            <div className="flex my-4 mx-2 items-center"><FaClock className="inline w-9 h-4" /> {data.createdAt?.toLocaleString()}</div>
+                            <div className="flex my-4 mx-2 items-center"><FaClock className="inline w-9 h-4" /> <Timestamp time={data.createdAt} /></div>
                             <div className="flex my-4 mx-2 items-center"><FaBookmark className="inline w-9 h-4" /> <span className="badge badge-lg bg-gray-300 py-2 pl-1"><FaHashtag className="mr-1" /> {data.collection?.title}</span></div>
                         </div>
                     </div>
