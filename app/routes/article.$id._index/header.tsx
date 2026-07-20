@@ -5,8 +5,8 @@ import NumberFlow from '@number-flow/react';
 
 interface HeaderProps {
     title: string;
-    articleRef: React.RefObject<HTMLDivElement>;
-    nextArticleRef: React.RefObject<HTMLDivElement>;
+    articleRef: React.RefObject<HTMLDivElement | null>;
+    nextArticleRef: React.RefObject<HTMLDivElement | null>;
 }
 
 interface ItemArgs extends PropsWithChildren {

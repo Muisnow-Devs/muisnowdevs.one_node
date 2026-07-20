@@ -1,6 +1,7 @@
 import { relations, sql } from "drizzle-orm";
-import { boolean, customType, index, int, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { boolean, customType, index, int, mysqlTable, primaryKey, text, timestamp, varchar } from "drizzle-orm/mysql-core";
 import { v4 } from "uuid";
+import type { DownloadLifecycle } from "@/functions/downloadLifecycle";
 
 export const collections = mysqlTable("collections", {
     id: varchar("id", { length: 32 })
@@ -35,7 +36,6 @@ export const articles = mysqlTable("articles", {
     content: text("content")
         .notNull(),
     collection: varchar("collection", { length: 32 })
-        .notNull()
         .references(() => collections.id),
     comment: boolean("comment")
         .notNull()
@@ -50,8 +50,34 @@ export const articles = mysqlTable("articles", {
     collectionIdx: index("articles_collection_idx").on(articles.collection)
 }));
 
-export const articleRelations = relations(articles, ({ one }) => ({
-    collection: one(collections, { fields: [articles.collection], references: [collections.id]})
+export const labels = mysqlTable("labels", {
+    id: varchar("id", { length: 32 }).primaryKey().notNull(),
+    title: varchar("title", { length: 64 }).notNull().unique(),
+    description: text("description"),
+    createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    enabled: boolean("enabled").notNull().default(true),
+});
+
+export const articleLabels = mysqlTable("article_labels", {
+    articleId: int("article_id").notNull().references(() => articles.id),
+    labelId: varchar("label_id", { length: 32 }).notNull().references(() => labels.id),
+}, (table) => ({
+    pk: primaryKey({ columns: [table.articleId, table.labelId] }),
+    labelIdx: index("article_labels_label_idx").on(table.labelId),
+}));
+
+export const articleRelations = relations(articles, ({ one, many }) => ({
+    collection: one(collections, { fields: [articles.collection], references: [collections.id] }),
+    articleLabels: many(articleLabels),
+}));
+
+export const articleLabelsRelations = relations(articleLabels, ({ one }) => ({
+    article: one(articles, { fields: [articleLabels.articleId], references: [articles.id] }),
+    label: one(labels, { fields: [articleLabels.labelId], references: [labels.id] }),
+}));
+
+export const labelRelations = relations(labels, ({ many }) => ({
+    articleLabels: many(articleLabels),
 }));
 
 export const downloadableFiles = mysqlTable("downloadable_file", {
@@ -80,6 +106,10 @@ export const downloadableFiles = mysqlTable("downloadable_file", {
     enabled: boolean("enabled")
         .notNull()
         .default(true),
+    lifecycle: varchar("lifecycle", { length: 16 })
+        .$type<DownloadLifecycle>()
+        .notNull()
+        .default("active"),
 }, (downloadableFiles) => ({
     filenameIdx: index("downloadable_files_filename_idx").on(downloadableFiles.filename),
     originalFilenameIdx: index("downloadable_files_original_filename_idx").on(downloadableFiles.originalFilename),

@@ -7,6 +7,7 @@ interface ArticleBoxComonentArgs {
     title: string;
     description: string;
     createdAt: Date;
+    labels: { id: string; title: string }[];
 }
 
 export default function ArticleBoxComponent(configs: ArticleBoxComonentArgs) {
@@ -20,5 +21,6 @@ export default function ArticleBoxComponent(configs: ArticleBoxComonentArgs) {
         </div>
         <div className="w-full border mt-2"></div>
         <p className="p-4 text-gray-700">{configs.description}</p>
+        {configs.labels.length > 0 && <div className="flex flex-wrap gap-1">{configs.labels.map((label) => <span className="badge" key={label.id}># {label.title}</span>)}</div>}
     </Link>
 }

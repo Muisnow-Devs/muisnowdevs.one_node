@@ -35,13 +35,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
             orderBy: (v) => desc(v.id),
             offset: (page - 1) * limit,
             limit,
-            with: {
-                collection: {
-                    columns: {
-                        enabled: false
-                    }
-                }
-            },
+            with: { articleLabels: { with: { label: true } } },
             columns: {
                 id: true,
                 title: true,
@@ -50,7 +44,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
             }
         });
     
-    return articles;
+    return articles.map(({ articleLabels, ...article }) => ({
+        ...article,
+        labels: articleLabels.map(({ label }) => label),
+    }));
 }
 
 export default function Articles() {

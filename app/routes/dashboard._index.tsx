@@ -27,6 +27,7 @@ export default function DashboardPage() {
         <p>選擇服務</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             <ServiceCard name="文章" description="管理你的文章" to="article" />
+            <ServiceCard name="標籤" description="管理文章標籤" to="label" />
             <ServiceCard name="可下載文件" description="管理你的可下載文件" to="download" />
             <ServiceCard name="媒體" description="管理你的媒體" to="media" />
         </div>

@@ -23,10 +23,19 @@ export const sign = (data: string) => {
 }
 
 export const verify = (data: string, signature: string) => {
-    const [signatureData, iv, time] = signature.split('.');
-    const encrypted = Buffer.from(signatureData, 'hex');
-    const key = getTimebasedKey(Number(time));
-    const decipher = nodeCrypto.createDecipheriv('aes-256-cbc', key.key, Buffer.from(iv, "hex"));
-    const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]).toString();
-    return decrypted === nodeCrypto.createHash('sha256').update(data).digest('hex');
+    try {
+        const [signatureData, iv, timeValue, ...extra] = signature.split('.');
+        const time = Number(timeValue);
+        const currentTime = Math.floor(Date.now() / 1000 / 60);
+        if (extra.length || !signatureData || !iv || !Number.isInteger(time) || time > currentTime + 1 || currentTime - time > 60)
+            return false;
+
+        const encrypted = Buffer.from(signatureData, 'hex');
+        const key = getTimebasedKey(time);
+        const decipher = nodeCrypto.createDecipheriv('aes-256-cbc', key.key, Buffer.from(iv, "hex"));
+        const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]).toString();
+        return decrypted === nodeCrypto.createHash('sha256').update(data).digest('hex');
+    } catch {
+        return false;
+    }
 }

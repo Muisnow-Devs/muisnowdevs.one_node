@@ -23,13 +23,7 @@ async function getArticle(id: string) {
         .articles
         .findFirst({
             where: (v) => and(eq(v.id, Number(id)), eq(v.enabled, true)),
-            with: {
-                collection: {
-                    columns: {
-                        enabled: false
-                    }
-                }
-            },
+            with: { articleLabels: { with: { label: true } } },
             columns: {
                 enabled: false,
                 collection: false
@@ -66,8 +60,10 @@ async function getArticle(id: string) {
 
     const [previous, next] = await Promise.all([previousSQL, nextSQL]);
     
+    const { articleLabels, ...article } = response;
     return {
-        ...response,
+        ...article,
+        labels: articleLabels.map(({ label }) => label),
         near: {
             previous,
             next
@@ -101,7 +97,7 @@ export default function ArticlePage() {
 
                         <div className="mt-8 font-bold">
                             <div className="flex my-4 mx-2 items-center"><FaClock className="inline w-9 h-4" /> <Timestamp time={data.createdAt} /></div>
-                            <div className="flex my-4 mx-2 items-center"><FaBookmark className="inline w-9 h-4" /> <span className="badge badge-lg bg-gray-300 py-2 pl-1"><FaHashtag className="mr-1" /> {data.collection?.title}</span></div>
+                            {data.labels.length > 0 && <div className="flex my-4 mx-2 items-center gap-1 flex-wrap"><FaBookmark className="inline w-9 h-4" /> {data.labels.map((label) => <span className="badge badge-lg bg-gray-300 py-2 pl-1" key={label.id}><FaHashtag className="mr-1" /> {label.title}</span>)}</div>}
                         </div>
                     </div>
 

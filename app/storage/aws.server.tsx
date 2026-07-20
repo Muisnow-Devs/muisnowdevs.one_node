@@ -1,4 +1,4 @@
-import { CompleteMultipartUploadCommand, CreateMultipartUploadCommand, DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client, UploadPartCommand } from "@aws-sdk/client-s3";
+import { AbortMultipartUploadCommand, CompleteMultipartUploadCommand, CreateMultipartUploadCommand, DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client, UploadPartCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { fileTypeFromBuffer } from "file-type";
 import redis from './redis.server';
@@ -42,13 +42,18 @@ export class S3Actions {
         const size = await redis.get(`s3:${file}:size`);
 
         if (!size) {
-            const metadata = await this.getResourceMetadata(file);
-            await redis.set(`s3:${file}:size`, metadata.ContentLength || 0, { EX: REDIS_EXPIRED_IN });
+            const resourceSize = await this.getResourceSizeDirect(file);
+            await redis.set(`s3:${file}:size`, resourceSize, { EX: REDIS_EXPIRED_IN });
 
-            return Number(metadata.ContentLength || 0);
+            return resourceSize;
         }
 
         return Number(size);
+    }
+
+    async getResourceSizeDirect(file: string) {
+        const metadata = await this.getResourceMetadata(file);
+        return Number(metadata.ContentLength || 0);
     }
 
     async getResourceSignedUrl(file: string, filename: string) {
@@ -127,6 +132,14 @@ export class S3Actions {
             MultipartUpload: {
                 Parts: parts
             }
+        }));
+    }
+
+    async abortResourceMultipartUpload(file: string, uploadId: string) {
+        return await this.client.send(new AbortMultipartUploadCommand({
+            Bucket: this.bucket,
+            Key: file,
+            UploadId: uploadId,
         }));
     }
 }

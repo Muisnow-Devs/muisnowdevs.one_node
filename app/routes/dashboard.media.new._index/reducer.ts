@@ -8,13 +8,13 @@ export enum ActionType {
 }
 
 export type Action =
-    | { type: ActionType.SET_FILE, payload: File | null }
+    | { type: ActionType.SET_FILE, payload: File[] }
     | { type: ActionType.SET_STATE, payload: UploadStatus }
     | { type: ActionType.SET_UPLOAD_INFO, payload: ServerUploadResponse }
     | { type: ActionType.ADD_UPLOAD_SUCCESSFUL_CHUNK, payload: UploadPart };
 
 export interface UploadInfo {
-    file: File | null;
+    file: File[];
     state: UploadStatus;
     uploadInfo: ServerUploadResponse | null;
     successfulChunks: UploadPart[];

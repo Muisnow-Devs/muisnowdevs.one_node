@@ -2,18 +2,18 @@ import { humanFileSize } from "@/utils";
 import { MdFileUpload, MdRestartAlt } from "react-icons/md";
 
 interface UploadFileArgs {
-    setFile: (file: File) => void;
+    setFiles: (files: File[]) => void;
 }
 
 function UploadFile(config: UploadFileArgs) {
     return <label onDrop={(event) => {
         event.preventDefault();
-        const file = event.dataTransfer.files[0];
+        const files = Array.from(event.dataTransfer.files);
 
-        if (!file)
+        if (files.length === 0)
             return;
 
-        config.setFile(file);
+        config.setFiles(files);
     }} onDragOver={(event) => event.preventDefault()}>
         {/* With drag and drop theme */}
         <div className="rounded-lg h-96 bg-gray-100 p-10 border-2 border-dashed border-gray-400 hover:bg-gray-200 cursor-pointer transition-all grid place-content-center">
@@ -25,13 +25,13 @@ function UploadFile(config: UploadFileArgs) {
             </div>
             <div className="mt-5"><span className="text-orange-600">拖曳檔案</span>至此或<span className="text-orange-600">點擊</span>上傳</div>
         </div>
-        <input type="file" className="hidden" onChange={(event) => {
-            const file = event.target.files?.[0];
+        <input type="file" multiple className="hidden" onChange={(event) => {
+            const files = Array.from(event.target.files || []);
 
-            if (!file)
+            if (files.length === 0)
                 return;
 
-            config.setFile(file);
+            config.setFiles(files);
         }} />
     </label>;
 }
@@ -63,17 +63,18 @@ function FileSelected(config: FileSelectedArgs) {
 }
 
 interface FileUploadComponentArgs {
-    file: File | null;
-    setFile: (file: File | null) => void;
+    files: File[];
+    setFiles: (files: File[]) => void;
 }
 
 export default function FileUploadComponent(config: FileUploadComponentArgs) {
     return <div>
-        {!config.file && <UploadFile setFile={config.setFile} />}
-        {config.file && <FileSelected
-            filename={config.file.name}
-            size={config.file.size}
-            mimeType={config.file.type}
-            onReselect={() => config.setFile(null)} />}
+        {config.files.length === 0 && <UploadFile setFiles={config.setFiles} />}
+        {config.files.map((file) => <FileSelected
+            key={`${file.name}:${file.lastModified}`}
+            filename={file.name}
+            size={file.size}
+            mimeType={file.type}
+            onReselect={() => config.setFiles([])} />)}
     </div>
 }

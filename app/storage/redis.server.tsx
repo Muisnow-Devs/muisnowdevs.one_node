@@ -1,4 +1,5 @@
 import redis from 'redis';
+import { connectRedisClient } from "./redisConnection.server";
 
 const client = redis.createClient({
     username: process.env.REDIS_USER || undefined,
@@ -10,10 +11,11 @@ const client = redis.createClient({
     }
 });
 
-(async () => {
-    console.log("[Redis] Connecting to Redis...");
-    await client.connect();
-    console.log("[Redis] Connected");
-})();
+console.log("[Redis] Connecting to Redis...");
+void connectRedisClient(client, (error) => console.error("[Redis] Connection error:", error))
+    .then((connected) => {
+        if (connected)
+            console.log("[Redis] Connected");
+    });
 
 export default client;

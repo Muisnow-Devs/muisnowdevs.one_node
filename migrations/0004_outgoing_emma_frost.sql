@@ -1,0 +1,1 @@
+ALTER TABLE `downloadable_file` ADD `lifecycle` varchar(16) DEFAULT 'active' NOT NULL;

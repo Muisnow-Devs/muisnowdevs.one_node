@@ -1,10 +1,14 @@
 import { UploadStatus } from "@/functions/handleFileUpload";
-import { MetaFunction , ActionFunctionArgs } from "react-router";
+import { MetaFunction, useLoaderData, useNavigate } from "react-router";
 import { useReducer } from "react";
 import SelectFileSection from "./selectFile";
 import reducer, { ActionType } from "./reducer";
-import UploadingSection from "./uploading";
-import invariant from "tiny-invariant";
+import UploadingSection from "@/components/upload/uploadingSection";
+import { getMaxUploadSizeBytes } from "@/functions/handleFileUpload/validation";
+
+export function loader() {
+    return { maxUploadSizeBytes: getMaxUploadSizeBytes() };
+}
 
 export const meta: MetaFunction = () => {
     return [
@@ -16,17 +20,11 @@ export const meta: MetaFunction = () => {
     ];
 };
 
-export async function action({ request }: ActionFunctionArgs) {
-    const body = await request.formData();
-    const ac = body.get("action");
-    invariant(ac, "action is required");
-
-    // const uploadAction = Number(ac) as unknown as UploadStatus;
-}
-
 export default function DashboardMediaNewIndex() {
+    const { maxUploadSizeBytes } = useLoaderData<typeof loader>();
+    const navigate = useNavigate();
     const [state, dispatch] = useReducer(reducer, {
-        file: null,
+        file: [],
         state: UploadStatus.SELECTING,
         uploadInfo: null,
         successfulChunks: [],
@@ -37,11 +35,13 @@ export default function DashboardMediaNewIndex() {
 
         {state.state === UploadStatus.SELECTING && <SelectFileSection
             setState={(state) => dispatch({ type: ActionType.SET_STATE, payload: state })}
-            file={state.file}
-            setFile={(file) => dispatch({ type: ActionType.SET_FILE, payload: file })} />}
+            files={state.file}
+            setFiles={(files) => dispatch({ type: ActionType.SET_FILE, payload: files })} />}
         {state.state === UploadStatus.UPLOADING && <UploadingSection
-            file={state.file}
-            onSuccessfulChunks={(chunks) => dispatch({ type: ActionType.ADD_UPLOAD_SUCCESSFUL_CHUNK, payload: chunks })}
-            setState={(state) => dispatch({ type: ActionType.SET_STATE, payload: state })} />}
+            bucket="media"
+            files={state.file}
+            maxUploadSizeBytes={maxUploadSizeBytes}
+            onComplete={() => undefined}
+            onAllComplete={() => navigate("/dashboard/media")} />}
     </div>;
 }
