@@ -22,6 +22,7 @@ export default function MarkdownEditor({
               id="editor"
               value={value}
               onChange={(next) => onChange(next ?? "")}
+              highlightEnable={false}
               className="font-normal font-sans"
               preview="edit"
               height={480}

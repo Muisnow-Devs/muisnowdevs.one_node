@@ -62,4 +62,13 @@ pre code, code {
     * {
         font-family: inherit !important;
     }
+
+    .w-md-editor-text {
+        height: 100%;
+    }
+
+    pre.w-md-editor-text-pre > code,
+    .w-md-editor-text-input, .w-md-editor-text-input > textarea {
+        height: 100%;
+    }
 }
