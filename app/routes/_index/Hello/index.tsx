@@ -1,7 +1,7 @@
 import Typewriter from "typewriter-effect";
 import { GradText, IconLink, IconLinkArgs, LinkButton } from "@/components/text";
 import { FaBook, FaCoffee, FaGithub, FaTwitter, FaUser, FaYoutube } from "react-icons/fa";
-import { FaThreads } from "react-icons/fa6";
+import { SiMisskey } from "react-icons/si";
 
 const ProfileIconLink = (configs: IconLinkArgs) => <div className="last:mr-0 after:content-['•'] last:after:content-none after:px-3 after:inline-block">
     <IconLink {...configs} className="inline-block" />
@@ -38,7 +38,7 @@ export default function Home() {
                 <ProfileIconLink name="X (Twitter)" color="blue" icon={FaTwitter} link="https://twitter.com/Hen000000hen" />
                 <ProfileIconLink name="YouTube" color="red" icon={FaYoutube} link="https://www.youtube.com/@muisnow" />
                 <ProfileIconLink name="GitHub" icon={FaGithub} link="https://github.com/000hen" />
-                <ProfileIconLink name="Threads" icon={FaThreads} link="https://www.threads.net/@chenkuiheng" />
+                <ProfileIconLink name="Misskey" icon={SiMisskey} link="https://nap.social/@muisnow" />
                 <ProfileIconLink name="Buy Me a Coffee" color="yellow" icon={FaCoffee} link="https://buymeacoffee.com/muisnow" />
             </div>
         </div>
