@@ -5,7 +5,7 @@ import {
     getPresignedPUTUrl,
 } from "@/functions/handleFileUpload/index.server";
 import { UploadBucket } from "@/functions/handleFileUpload";
-import { getExpectedUploadPartCount, validateUpload, validateUploadParts } from "@/functions/handleFileUpload/validation";
+import { getExpectedUploadPartCount, validateUpload } from "@/functions/handleFileUpload/validation";
 import { privateS3, publicS3 } from "@/storage/aws.server";
 import db from "@/db/client.server";
 import { downloadableFiles } from "@/db/schema";
@@ -67,16 +67,7 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     if (intent === "complete") {
-        let parts: unknown;
-        try {
-            parts = JSON.parse(String(formData.get("parts") || "[]"));
-        } catch {
-            throw new Response("Invalid upload parts", { status: 400 });
-        }
-        if (!validateUploadParts(parts, resource.size))
-            throw new Response("Invalid upload part layout", { status: 400 });
-
-        const completed = await completeFileUploadSession(client, bucket, resource, parts);
+        const completed = await completeFileUploadSession(client, bucket, resource);
         if (!completed)
             throw new Response("Invalid upload session", { status: 403 });
 

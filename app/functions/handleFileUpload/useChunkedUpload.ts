@@ -1,4 +1,4 @@
-import { UploadBucket, UploadPart } from ".";
+import { UploadBucket } from ".";
 import { getMaxUploadSizeBytes, UPLOAD_CHUNK_SIZE_BYTES, validateUploadSize } from "./validation";
 
 export function getUploadChunkRanges(size: number) {
@@ -29,7 +29,6 @@ export async function uploadFileInChunks(file: File, bucket: UploadBucket, onPro
         throw new Error(validationError);
 
     const session = await uploadRequest({ intent: "create", bucket, filename: file.name, mimetype: file.type, size: file.size }, signal);
-    const parts: UploadPart[] = [];
     let uploadedBytes = 0;
 
     try {
@@ -39,15 +38,13 @@ export async function uploadFileInChunks(file: File, bucket: UploadBucket, onPro
             const chunk = file.slice(range.start, range.end);
             const { url } = await uploadRequest({ intent: "part", bucket, part, ...session }, signal);
             const response = await fetch(url, { method: "PUT", body: chunk });
-            const ETag = response.headers.get("ETag") || response.headers.get("Etag");
-            if (!response.ok || !ETag)
-                throw new Error("Unable to upload file part. Confirm R2 CORS exposes the ETag header.");
-            parts.push({ ETag, PartNumber: part });
+            if (!response.ok)
+                throw new Error("Unable to upload file part.");
             uploadedBytes += chunk.size;
             onProgress(uploadedBytes / file.size);
         }
 
-        await uploadRequest({ intent: "complete", bucket, parts: JSON.stringify(parts), ...session }, signal);
+        await uploadRequest({ intent: "complete", bucket, ...session }, signal);
         return { resourceId: session.resourceId, metadata: { file, size: file.size, type: file.type } satisfies UploadedFileMetadata };
     } catch (error) {
         try {

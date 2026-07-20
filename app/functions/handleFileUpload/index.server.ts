@@ -1,8 +1,8 @@
 import { sign, verify } from "@/crypto";
 import { S3Actions } from "@/storage/aws.server";
 import { v4 } from "uuid";
-import { getResourceId, ServerUploadResponse, UploadBucket, UploadPart } from ".";
-import { validateUpload } from "./validation";
+import { getResourceId, ServerUploadResponse, UploadBucket } from ".";
+import { getExpectedUploadPartCount, validateUpload } from "./validation";
 
 function getSignaturePayload(bucket: UploadBucket, uploadId: string, resourceId: string, size: number) {
     return [bucket, uploadId, resourceId, size].join(':');
@@ -32,9 +32,23 @@ export async function getPresignedPUTUrl(client: S3Actions, bucket: UploadBucket
     return client.uploadResourcePartWithSignedUrl(resource.resourceId, part, resource.uploadId);
 }
 
-export async function completeFileUploadSession(client: S3Actions, bucket: UploadBucket, resource: ServerUploadResponse, parts: UploadPart[]): Promise<boolean> {
+export async function completeFileUploadSession(client: S3Actions, bucket: UploadBucket, resource: ServerUploadResponse): Promise<boolean> {
     if (!hasValidSignature(bucket, resource))
-        return false
+        return false;
+
+    // Retrieve parts (with ETags) from R2 server-side — this avoids the need for
+    // the browser to read ETag from the presigned PUT response, which requires
+    // CORS Access-Control-Expose-Headers: ETag to be configured on the R2 bucket.
+    const listedParts = await client.listResourceMultipartUploadParts(resource.resourceId, resource.uploadId);
+    const expectedPartCount = getExpectedUploadPartCount(resource.size);
+
+    if (listedParts.length !== expectedPartCount)
+        return false;
+
+    const parts = listedParts.map((part, index) => ({
+        ETag: part.ETag ?? "",
+        PartNumber: index + 1,
+    }));
 
     await client.completeResourceMultipartUpload(resource.resourceId, resource.uploadId, parts);
 

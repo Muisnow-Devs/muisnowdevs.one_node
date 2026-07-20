@@ -1,4 +1,4 @@
-import { AbortMultipartUploadCommand, CompleteMultipartUploadCommand, CreateMultipartUploadCommand, DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client, UploadPartCommand } from "@aws-sdk/client-s3";
+import { AbortMultipartUploadCommand, CompleteMultipartUploadCommand, CreateMultipartUploadCommand, DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, ListPartsCommand, PutObjectCommand, S3Client, UploadPartCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { fileTypeFromBuffer } from "file-type";
 import redis from './redis.server';
@@ -141,6 +141,18 @@ export class S3Actions {
             Key: file,
             UploadId: uploadId,
         }));
+    }
+
+    // Returns all uploaded parts for a multipart upload, used server-side to
+    // complete the upload without requiring the browser to read ETag headers
+    // (which would require CORS Access-Control-Expose-Headers: ETag on R2).
+    async listResourceMultipartUploadParts(file: string, uploadId: string) {
+        const data = await this.client.send(new ListPartsCommand({
+            Bucket: this.bucket,
+            Key: file,
+            UploadId: uploadId,
+        }));
+        return data.Parts ?? [];
     }
 }
 
