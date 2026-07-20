@@ -34,11 +34,12 @@ export async function uploadFileInChunks(file: File, bucket: UploadBucket, onPro
 
     try {
         for (const [index, range] of getUploadChunkRanges(file.size).entries()) {
+            if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
             const part = index + 1;
             const chunk = file.slice(range.start, range.end);
             const { url } = await uploadRequest({ intent: "part", bucket, part, ...session }, signal);
-            const response = await fetch(url, { method: "PUT", body: chunk, signal });
-            const ETag = response.headers.get("ETag");
+            const response = await fetch(url, { method: "PUT", body: chunk });
+            const ETag = response.headers.get("ETag") || response.headers.get("Etag");
             if (!response.ok || !ETag)
                 throw new Error("Unable to upload file part. Confirm R2 CORS exposes the ETag header.");
             parts.push({ ETag, PartNumber: part });
