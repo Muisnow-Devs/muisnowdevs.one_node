@@ -39,6 +39,7 @@ that is defined but never called — the fast path this design wires up.
 | Resumability | Out of scope — an interrupted upload restarts |
 | Single-PUT crossover | 8 MiB, i.e. exactly the files that would be one multipart part |
 | Structure | Two explicit strategies over a shared core |
+| Session expiry | Rolling signature — each `part` response re-issues `validate` |
 | File rename | `useChunkedUpload.ts` → `uploadClient.ts` |
 
 ### Why 8 MiB and not 100 MB
@@ -119,6 +120,27 @@ Both delete the object and return `false` on mismatch. The existing compensation
 `abort`: `DeleteObject` for single (best effort — the object may not exist),
 `AbortMultipartUpload` for multipart.
 
+#### Rolling signature
+
+`sign`/`verify` (`app/crypto.ts`) derives its key from a minute-resolution timestamp and
+rejects anything older than 60 minutes (`crypto.ts:31`, asserted by `crypto.test.ts:14`).
+Because `validate` is issued once at `create` and re-checked on every subsequent intent, an
+upload currently has 60 minutes total from start to finish. Invisible under a 100 MB cap;
+binding once the private bucket is uncapped — 10 GB would need ~2.8 MB/s sustained, 50 GB
+~14 MB/s.
+
+Each successful `part` response therefore returns a freshly signed `validate` over the
+**same** payload, and the client swaps it in for subsequent requests. Total upload duration
+becomes unbounded while each individual signature keeps its tight 60-minute replay window.
+`crypto.ts` is not modified.
+
+Parallel workers need no locking here. The payload is identical across re-issues, so every
+signature the server hands out is independently valid for its own 60 minutes; the client
+simply keeps the most recent one it has seen.
+
+The remaining ceiling is 60 minutes between two *consecutive* part completions. With parts up
+to ~524 MiB that requires a pathologically slow link, and it is accepted rather than handled.
+
 ### 3. Latent bugs fixed as part of this work
 
 Each is currently masked by the 100 MB cap and becomes reachable once it is lifted.
@@ -181,8 +203,11 @@ not a concern.
 `package.json` has no `test` script despite three `node:test` files. Add:
 
 ```json
-"test": "node --import tsx --test \"app/**/*.test.ts\""
+"test": "node --env-file=.env --import tsx --test \"app/**/*.test.ts\""
 ```
+
+`--env-file=.env` is required: `app/crypto.ts` throws at module load without
+`VERIFICATION_KEY`, so `crypto.test.ts` fails without it. Verified working on Node v24.16.0.
 
 New coverage, all pure functions with injected fakes — no network:
 
@@ -197,6 +222,23 @@ New coverage, all pure functions with injected fakes — no network:
 
 Existing tests in `validation.test.ts` need updating for the `bucket` parameter and the
 adaptive part size.
+
+### 7. Dead code removed
+
+Confirmed unreferenced outside their own tests, and removed as part of this work rather than
+left to rot beside the code being restructured:
+
+- `validateUploadParts` and `MultipartUploadPart` (`validation.ts:5,40`) — superseded by the
+  `ListParts` count check in `completeFileUploadSession`. Their two tests go with them.
+- `UploadPart` (`index.ts:8`).
+- `ActionType.SET_UPLOAD_INFO`, `ActionType.ADD_UPLOAD_SUCCESSFUL_CHUNK`, and the
+  `uploadInfo` / `successfulChunks` state fields (`dashboard.media.new._index/reducer.ts`).
+  Neither action is ever dispatched; the fields are initialised at `route.tsx:120-121` and
+  never read. They predate `UploadingSection` owning upload state.
+- `UPLOAD_CHUNK_SIZE_BYTES` (`validation.ts:3`) — replaced by `getUploadPartSize`.
+
+`ServerUploadResponse` is renamed `UploadSession` and gains `mode`. `putResourceWithSignedUrl`
+(`aws.server.tsx:67`) stops being dead — it becomes the single-PUT path.
 
 ## Out of scope
 
