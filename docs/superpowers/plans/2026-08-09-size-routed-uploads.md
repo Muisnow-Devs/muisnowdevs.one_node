@@ -49,6 +49,7 @@
 - Modify: `app/functions/handleFileUpload/validation.ts` (full rewrite)
 - Modify: `app/functions/handleFileUpload/validation.test.ts` (full rewrite)
 - Modify: `app/functions/handleFileUpload/useChunkedUpload.ts:1-9,26`
+- Modify: `app/functions/handleFileUpload/index.server.ts:57`
 - Modify: `app/routes/dashboard.upload._index.ts:33,47`
 - Modify: `app/routes/dashboard.media.new._index/route.tsx:18`
 - Modify: `app/routes/dashboard.download.new._index/route.tsx:18`
@@ -252,7 +253,13 @@ This drops `UPLOAD_CHUNK_SIZE_BYTES`, `validateUploadParts`, and `MultipartUploa
 
 - [ ] **Step 7: Update every call site in the same commit**
 
-`getUploadChunkRanges` now lives in `validation.ts`, and both `validateUpload` and `getMaxUploadSizeBytes` take a bucket. Four files reference them.
+`getUploadChunkRanges` now lives in `validation.ts`, and both `validateUpload` and `getMaxUploadSizeBytes` take a bucket. Five files reference them.
+
+In `app/functions/handleFileUpload/index.server.ts`, line 57 — `bucket` is already a parameter of `completeFileUploadSession`, so the fix is local. Task 5 rewrites this file wholesale; this edit only keeps the tree compiling until then:
+
+```ts
+        if (actualSize !== resource.size || validateUpload(bucket, actualSize)) {
+```
 
 In `app/functions/handleFileUpload/useChunkedUpload.ts`, replace lines 1-9 (the imports and the local `getUploadChunkRanges`) with:
 
