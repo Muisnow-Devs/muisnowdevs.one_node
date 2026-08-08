@@ -479,7 +479,7 @@ git commit -m "feat: sanitize upload extensions and add session types"
 
 **Interfaces:**
 - Consumes: nothing.
-- Produces: `MultipartPart { ETag: string; PartNumber: number }`; `PartsPage { parts: MultipartPart[]; nextMarker?: string; isTruncated: boolean }`; `collectMultipartParts(fetchPage: (marker?: string) => Promise<PartsPage>): Promise<MultipartPart[]>`. `S3Actions.listResourceMultipartUploadParts` now returns `Promise<MultipartPart[]>`, sorted ascending. `S3Actions.putResourceWithSignedUrl(file, contentType?)`.
+- Produces: `MultipartPart { ETag: string; PartNumber: number }`; `PartsPage { parts: MultipartPart[]; nextMarker?: string; isTruncated: boolean }`; `collectMultipartParts(fetchPage: (marker?: string) => Promise<PartsPage>, maxParts: number): Promise<MultipartPart[]>`. `S3Actions.listResourceMultipartUploadParts` now returns `Promise<MultipartPart[]>`, sorted ascending. `S3Actions.putResourceWithSignedUrl(file, contentType?)`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -494,7 +494,7 @@ test("collectMultipartParts returns a single page unchanged", async () => {
     const parts = await collectMultipartParts(async () => ({
         parts: [{ ETag: "a", PartNumber: 1 }, { ETag: "b", PartNumber: 2 }],
         isTruncated: false,
-    }));
+    }), 10_000);
 
     assert.deepEqual(parts, [{ ETag: "a", PartNumber: 1 }, { ETag: "b", PartNumber: 2 }]);
 });
@@ -510,7 +510,7 @@ test("collectMultipartParts follows the marker across pages", async () => {
     const parts = await collectMultipartParts(async (marker) => {
         seen.push(marker);
         return pages[marker ?? ""];
-    });
+    }, 10_000);
 
     assert.deepEqual(seen, [undefined, "1", "2"]);
     assert.deepEqual(parts.map((part) => part.PartNumber), [1, 2, 3]);
@@ -520,7 +520,7 @@ test("collectMultipartParts sorts parts ascending regardless of arrival order", 
     const parts = await collectMultipartParts(async () => ({
         parts: [{ ETag: "c", PartNumber: 3 }, { ETag: "a", PartNumber: 1 }, { ETag: "b", PartNumber: 2 }],
         isTruncated: false,
-    }));
+    }), 10_000);
 
     assert.deepEqual(parts.map((part) => part.PartNumber), [1, 2, 3]);
 });
@@ -531,10 +531,30 @@ test("collectMultipartParts stops when truncated but no marker is returned", asy
     const parts = await collectMultipartParts(async () => {
         calls++;
         return { parts: [{ ETag: "a", PartNumber: 1 }], isTruncated: true };
-    });
+    }, 10_000);
 
     assert.equal(calls, 1);
     assert.equal(parts.length, 1);
+});
+
+test("collectMultipartParts throws when the server repeats a pagination marker", async () => {
+    let calls = 0;
+
+    await assert.rejects(collectMultipartParts(async () => {
+        calls++;
+        return { parts: [{ ETag: "a", PartNumber: 1 }], nextMarker: "1", isTruncated: true };
+    }, 10_000), /repeated the pagination marker/);
+
+    // Without the guard this would re-fetch the same page until the process ran out
+    // of memory; the second call is where the repeat is detected.
+    assert.equal(calls, 2);
+});
+
+test("collectMultipartParts throws when the listing exceeds the part ceiling", async () => {
+    await assert.rejects(collectMultipartParts(async (marker) => {
+        const next = Number(marker ?? 0) + 1;
+        return { parts: [{ ETag: "a", PartNumber: next }], nextMarker: String(next), isTruncated: true };
+    }, 2), /more than 2 parts/);
 });
 ```
 
@@ -561,17 +581,35 @@ export interface PartsPage {
 
 // ListParts returns at most 1000 parts per page. A file large enough to need more
 // would otherwise fail its completion check after every byte had already uploaded.
+//
+// Both guards below throw rather than returning a short list: the caller compares the
+// returned count against the expected part count, so a silently truncated list looks
+// exactly like an incomplete upload. A server that reports truncation while re-issuing
+// a marker it already handed out would otherwise be re-fetched until the process died.
 export async function collectMultipartParts(
     fetchPage: (marker?: string) => Promise<PartsPage>,
+    maxParts: number,
 ): Promise<MultipartPart[]> {
     const collected: MultipartPart[] = [];
+    const seenMarkers = new Set<string>();
     let marker: string | undefined = undefined;
     let truncated = true;
 
     while (truncated) {
         const page = await fetchPage(marker);
         collected.push(...page.parts);
+
+        if (collected.length > maxParts)
+            throw new Error(`ListParts returned more than ${maxParts} parts.`);
+
         marker = page.nextMarker;
+
+        if (marker !== undefined) {
+            if (seenMarkers.has(marker))
+                throw new Error(`ListParts repeated the pagination marker "${marker}".`);
+            seenMarkers.add(marker);
+        }
+
         truncated = page.isTruncated && marker !== undefined;
     }
 
@@ -589,8 +627,11 @@ Expected: PASS.
 In `app/storage/aws.server.tsx`, add after line 4:
 
 ```ts
+import { MAX_PART_COUNT } from "@/functions/handleFileUpload/validation";
 import { collectMultipartParts, MultipartPart } from "./multipartParts";
 ```
+
+`validation.ts` and its own import (`index.ts`) are both side-effect-free, so this direction is safe. The direction matters: `aws.server.tsx` may import `validation.ts`, never the reverse.
 
 Replace `putResourceWithSignedUrl` (lines 67-72) with:
 
@@ -626,7 +667,7 @@ Replace `listResourceMultipartUploadParts` and its comment (lines 146-156) with:
                 nextMarker: data.NextPartNumberMarker,
                 isTruncated: data.IsTruncated ?? false,
             };
-        });
+        }, MAX_PART_COUNT);
     }
 ```
 
