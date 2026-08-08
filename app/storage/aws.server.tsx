@@ -2,6 +2,7 @@ import { AbortMultipartUploadCommand, CompleteMultipartUploadCommand, CreateMult
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { fileTypeFromBuffer } from "file-type";
 import { collectMultipartParts, MultipartPart } from "./multipartParts";
+import { MAX_PART_COUNT } from "@/functions/handleFileUpload/validation";
 import redis from './redis.server';
 
 if (!process.env.S3_ENDPOINT) {
@@ -164,7 +165,7 @@ export class S3Actions {
                 nextMarker: data.NextPartNumberMarker,
                 isTruncated: data.IsTruncated ?? false,
             };
-        });
+        }, MAX_PART_COUNT);
     }
 }
 
