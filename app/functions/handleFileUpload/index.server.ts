@@ -45,12 +45,7 @@ export async function completeFileUploadSession(client: S3Actions, bucket: Uploa
     if (listedParts.length !== expectedPartCount)
         return false;
 
-    const parts = listedParts.map((part, index) => ({
-        ETag: part.ETag ?? "",
-        PartNumber: index + 1,
-    }));
-
-    await client.completeResourceMultipartUpload(resource.resourceId, resource.uploadId, parts);
+    await client.completeResourceMultipartUpload(resource.resourceId, resource.uploadId, listedParts);
 
     try {
         const actualSize = await client.getResourceSizeDirect(resource.resourceId);

@@ -1,6 +1,7 @@
 import { AbortMultipartUploadCommand, CompleteMultipartUploadCommand, CreateMultipartUploadCommand, DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, ListPartsCommand, PutObjectCommand, S3Client, UploadPartCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { fileTypeFromBuffer } from "file-type";
+import { collectMultipartParts, MultipartPart } from "./multipartParts";
 import redis from './redis.server';
 
 if (!process.env.S3_ENDPOINT) {
@@ -64,10 +65,11 @@ export class S3Actions {
         }), { expiresIn: EXPIRED_IN });
     }
 
-    async putResourceWithSignedUrl(file: string) {
+    async putResourceWithSignedUrl(file: string, contentType: string = "application/octet-stream") {
         return await getSignedUrl(this.client, new PutObjectCommand({
             Bucket: this.bucket,
             Key: file,
+            ContentType: contentType,
         }), { expiresIn: EXPIRED_IN });
     }
 
@@ -146,13 +148,23 @@ export class S3Actions {
     // Returns all uploaded parts for a multipart upload, used server-side to
     // complete the upload without requiring the browser to read ETag headers
     // (which would require CORS Access-Control-Expose-Headers: ETag on R2).
-    async listResourceMultipartUploadParts(file: string, uploadId: string) {
-        const data = await this.client.send(new ListPartsCommand({
-            Bucket: this.bucket,
-            Key: file,
-            UploadId: uploadId,
-        }));
-        return data.Parts ?? [];
+    async listResourceMultipartUploadParts(file: string, uploadId: string): Promise<MultipartPart[]> {
+        return await collectMultipartParts(async (marker) => {
+            const data = await this.client.send(new ListPartsCommand({
+                Bucket: this.bucket,
+                Key: file,
+                UploadId: uploadId,
+                PartNumberMarker: marker,
+            }));
+
+            return {
+                parts: (data.Parts ?? []).flatMap((part) => part.ETag && part.PartNumber !== undefined
+                    ? [{ ETag: part.ETag, PartNumber: part.PartNumber }]
+                    : []),
+                nextMarker: data.NextPartNumberMarker,
+                isTruncated: data.IsTruncated ?? false,
+            };
+        });
     }
 }
 
