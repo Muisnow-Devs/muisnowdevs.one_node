@@ -18,33 +18,40 @@
 - Concurrency 4 parts; 3 attempts per part; retry only network errors and 5xx/408/429.
 - Signed payload is `JSON.stringify([mode, bucket, uploadId, resourceId, size])`. Never `join(':')`.
 - Every `part` response re-issues `validate`; the client always sends the most recent one.
+- **Every task must leave `yarn typecheck`, `yarn lint`, and `yarn test` passing.** When a task changes a signature or removes an export, it also updates every call site in the same commit. A type or constant is deleted only in the task that removes its last consumer.
 - **Tests must never import `@/storage/aws.server`.** It transitively imports `redis.server.tsx`, which opens a Redis connection at module load (`redis.server.tsx:14-19`). Use `import type` for `S3Actions` so `isolatedModules` elides it at runtime.
-- Existing code style: 4-space indent, no semicolon-free style, single-statement `if` bodies without braces. Match it.
-- Run `yarn typecheck` and `yarn lint` before every commit.
+- Existing code style: 4-space indent in `app/functions` and `app/storage`, 2-space in `app/components` and `app/routes/**/route.tsx`. Single-statement `if` bodies without braces. Match the file you are editing.
+
+**Known mid-sequence gap:** uploads are runtime-broken between Task 5 and Task 6 — Task 5 makes the route require a `mode` field that the old client does not send. Typecheck, lint, and tests stay green throughout, but do not deploy from a commit inside that window.
 
 ---
 
 ## File Structure
 
-| File | Responsibility |
-| --- | --- |
-| `app/functions/handleFileUpload/index.ts` | Shared types, `getResourceId`, extension sanitization. No imports from siblings. |
-| `app/functions/handleFileUpload/validation.ts` | Pure size policy: caps, mode selection, part sizing, chunk ranges. |
-| `app/functions/handleFileUpload/index.server.ts` | Session create/part/complete/abort for both modes. Signature handling. |
-| `app/functions/handleFileUpload/uploadClient.ts` | Client strategies, concurrency pool, retry. Replaces `useChunkedUpload.ts`. |
-| `app/storage/multipartParts.ts` | **New.** Side-effect-free `ListParts` pagination helper. |
-| `app/storage/aws.server.tsx` | S3 command wrappers. Delegates pagination to `multipartParts.ts`. |
-| `app/routes/dashboard.upload._index.ts` | HTTP action dispatching the four intents. |
+| File | Responsibility | Task |
+| --- | --- | --- |
+| `app/functions/handleFileUpload/index.ts` | Shared types, `getResourceId`, extension sanitization. No imports from siblings. | 1, 2, 7 |
+| `app/functions/handleFileUpload/validation.ts` | Pure size policy: caps, mode selection, part sizing, chunk ranges. | 1 |
+| `app/functions/handleFileUpload/signature.ts` | **New.** The signed payload format, isolated from `@/crypto` so it is testable. | 4 |
+| `app/functions/handleFileUpload/index.server.ts` | Session create/part/complete/abort for both modes. | 3, 5 |
+| `app/functions/handleFileUpload/uploadClient.ts` | **New.** Client strategies, concurrency pool, retry. Replaces `useChunkedUpload.ts`. | 6 |
+| `app/storage/multipartParts.ts` | **New.** Side-effect-free `ListParts` pagination helper. | 3 |
+| `app/storage/aws.server.tsx` | S3 command wrappers. Delegates pagination to `multipartParts.ts`. | 3 |
+| `app/routes/dashboard.upload._index.ts` | HTTP action dispatching the four intents. | 1, 5 |
 
 ---
 
 ### Task 1: Size policy and part sizing
 
 **Files:**
-- Modify: `app/functions/handleFileUpload/index.ts`
-- Modify: `app/functions/handleFileUpload/validation.ts`
-- Modify: `app/functions/handleFileUpload/validation.test.ts`
 - Modify: `package.json`
+- Modify: `app/functions/handleFileUpload/index.ts`
+- Modify: `app/functions/handleFileUpload/validation.ts` (full rewrite)
+- Modify: `app/functions/handleFileUpload/validation.test.ts` (full rewrite)
+- Modify: `app/functions/handleFileUpload/useChunkedUpload.ts:1-9,26`
+- Modify: `app/routes/dashboard.upload._index.ts:33,47`
+- Modify: `app/routes/dashboard.media.new._index/route.tsx:18`
+- Modify: `app/routes/dashboard.download.new._index/route.tsx:18`
 - Test: `app/functions/handleFileUpload/validation.test.ts`
 
 **Interfaces:**
@@ -68,7 +75,7 @@ Expected: PASS, 20 tests. This is the pre-change baseline.
 
 - [ ] **Step 3: Add `UploadMode` to the shared types**
 
-In `app/functions/handleFileUpload/index.ts`, add below the existing `UploadBucket` line:
+In `app/functions/handleFileUpload/index.ts`, add immediately below the existing `export type UploadBucket` line:
 
 ```ts
 export type UploadMode = "single" | "multipart";
@@ -87,13 +94,12 @@ import {
     getUploadChunkRanges,
     getUploadMode,
     getUploadPartSize,
-    R2_MAX_OBJECT_BYTES,
     MAX_PART_COUNT,
     MIN_PART_SIZE_BYTES,
+    R2_MAX_OBJECT_BYTES,
     SINGLE_PUT_MAX_BYTES,
     validateUpload,
 } from "./validation";
-import { getResourceId } from ".";
 
 const MEGABYTE = 1024 * 1024;
 
@@ -155,8 +161,8 @@ test("getUploadChunkRanges covers the file with only the last part smaller", () 
     assert.equal(ranges.length, getExpectedUploadPartCount(20 * MEGABYTE));
 });
 
-test("download uploads use a UUID-only resource id compatible with downloadable_file", () => {
-    assert.equal(getResourceId("download", "archive.zip", () => "12345678-1234-1234-1234-123456789012"), "12345678-1234-1234-1234-123456789012");
+test("getUploadChunkRanges keeps small uploads in one part", () => {
+    assert.deepEqual(getUploadChunkRanges(1024), [{ start: 0, end: 1024 }]);
 });
 ```
 
@@ -242,17 +248,64 @@ export function getUploadChunkRanges(size: number): { start: number; end: number
 }
 ```
 
-This drops `UPLOAD_CHUNK_SIZE_BYTES`, `validateUploadParts`, and `MultipartUploadPart` — all confirmed unreferenced outside the tests just replaced.
+This drops `UPLOAD_CHUNK_SIZE_BYTES`, `validateUploadParts`, and `MultipartUploadPart`. The only consumers were the two tests just replaced and `useChunkedUpload.ts`, updated next.
 
-- [ ] **Step 7: Run tests to verify they pass**
+- [ ] **Step 7: Update every call site in the same commit**
+
+`getUploadChunkRanges` now lives in `validation.ts`, and both `validateUpload` and `getMaxUploadSizeBytes` take a bucket. Four files reference them.
+
+In `app/functions/handleFileUpload/useChunkedUpload.ts`, replace lines 1-9 (the imports and the local `getUploadChunkRanges`) with:
+
+```ts
+import { UploadBucket } from ".";
+import { getMaxUploadSizeBytes, getUploadChunkRanges, validateUploadSize } from "./validation";
+```
+
+and change the signature on line 26 (now line 19) so the default reads the bucket already in scope:
+
+```ts
+export async function uploadFileInChunks(file: File, bucket: UploadBucket, onProgress: (progress: number) => void, signal?: AbortSignal, maxUploadSizeBytes = getMaxUploadSizeBytes(bucket)) {
+```
+
+In `app/routes/dashboard.upload._index.ts`, line 33:
+
+```ts
+        const error = validateUpload(bucket, size);
+```
+
+and line 47:
+
+```ts
+    if (!resource.resourceId || !resource.uploadId || !resource.validate || validateUpload(bucket, resource.size))
+```
+
+In `app/routes/dashboard.media.new._index/route.tsx`, line 18 (2-space indent):
+
+```ts
+  return { maxUploadSizeBytes: getMaxUploadSizeBytes("media") };
+```
+
+In `app/routes/dashboard.download.new._index/route.tsx`, line 18 (4-space indent):
+
+```ts
+    return { maxUploadSizeBytes: getMaxUploadSizeBytes("download") };
+```
+
+- [ ] **Step 8: Run the full gate**
 
 Run: `yarn test`
-Expected: PASS. `useChunkedUpload.ts` still imports the removed `UPLOAD_CHUNK_SIZE_BYTES`, so `yarn typecheck` fails until Task 6 — that is expected and is not a test failure.
+Expected: PASS.
 
-- [ ] **Step 8: Commit**
+Run: `yarn typecheck`
+Expected: PASS, no errors.
+
+Run: `yarn lint`
+Expected: PASS.
+
+- [ ] **Step 9: Commit**
 
 ```bash
-git add package.json app/functions/handleFileUpload/index.ts app/functions/handleFileUpload/validation.ts app/functions/handleFileUpload/validation.test.ts
+git add package.json app/functions/handleFileUpload app/routes/dashboard.upload._index.ts app/routes/dashboard.media.new._index/route.tsx app/routes/dashboard.download.new._index/route.tsx
 git commit -m "feat: add per-bucket upload caps and adaptive part sizing"
 ```
 
@@ -266,7 +319,9 @@ git commit -m "feat: add per-bucket upload caps and adaptive part sizing"
 
 **Interfaces:**
 - Consumes: `UploadMode`, `UploadBucket` from Task 1.
-- Produces: `getFileExtension(filename: string | undefined): string`; `UploadSession`; `CreateUploadResponse`; `PartUploadResponse`. Removes `UploadPart`.
+- Produces: `getFileExtension(filename: string | undefined): string`; `UploadSession`; `CreateUploadResponse`; `PartUploadResponse`.
+
+`ServerUploadResponse` and `UploadPart` stay for now — `index.server.ts` and `reducer.ts` still use them. Task 7 deletes them once their last consumer is gone.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -350,6 +405,20 @@ export interface PartUploadResponse {
     validate: string;
 }
 
+// Superseded by UploadSession / UploadPart's role in multipartParts.ts. Task 7
+// removes both once index.server.ts and reducer.ts no longer reference them.
+export interface UploadPart {
+    ETag: string;
+    PartNumber: number;
+}
+
+export interface ServerUploadResponse {
+    resourceId: string,
+    uploadId: string,
+    validate: string,
+    size: number,
+}
+
 // The extension is concatenated into the S3 object key and into the signature
 // payload, so anything outside this set is dropped rather than trusted.
 const SAFE_EXTENSION = /^[a-z0-9]{1,12}$/;
@@ -376,11 +445,12 @@ export function getResourceId(bucket: UploadBucket, filename: string | undefined
 }
 ```
 
-`UploadPart` and `ServerUploadResponse` are gone. Task 5 updates `index.server.ts` and Task 8 updates the reducer.
-
-- [ ] **Step 4: Run the test to verify it passes**
+- [ ] **Step 4: Run the full gate**
 
 Run: `yarn test`
+Expected: PASS.
+
+Run: `yarn typecheck` and `yarn lint`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
@@ -396,12 +466,13 @@ git commit -m "feat: sanitize upload extensions and add session types"
 
 **Files:**
 - Create: `app/storage/multipartParts.ts`
-- Modify: `app/storage/aws.server.tsx:67-72` (add content type), `app/storage/aws.server.tsx:149-156` (pagination)
+- Modify: `app/storage/aws.server.tsx:67-72,146-156`
+- Modify: `app/functions/handleFileUpload/index.server.ts:48-53`
 - Test: `app/storage/multipartParts.test.ts` (create)
 
 **Interfaces:**
 - Consumes: nothing.
-- Produces: `MultipartPart { ETag: string; PartNumber: number }`; `PartsPage { parts: MultipartPart[]; nextMarker?: string; isTruncated: boolean }`; `collectMultipartParts(fetchPage: (marker?: string) => Promise<PartsPage>): Promise<MultipartPart[]>`. `S3Actions.listResourceMultipartUploadParts` now returns `Promise<MultipartPart[]>`, sorted ascending. `S3Actions.putResourceWithSignedUrl(file, contentType)`.
+- Produces: `MultipartPart { ETag: string; PartNumber: number }`; `PartsPage { parts: MultipartPart[]; nextMarker?: string; isTruncated: boolean }`; `collectMultipartParts(fetchPage: (marker?: string) => Promise<PartsPage>): Promise<MultipartPart[]>`. `S3Actions.listResourceMultipartUploadParts` now returns `Promise<MultipartPart[]>`, sorted ascending. `S3Actions.putResourceWithSignedUrl(file, contentType?)`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -508,7 +579,7 @@ Expected: PASS.
 
 - [ ] **Step 5: Wire the helper into `S3Actions` and add a content type to the single PUT**
 
-In `app/storage/aws.server.tsx`, add to the import block on line 1 the name `ListPartsCommand` if absent (it is already imported), and add after line 4:
+In `app/storage/aws.server.tsx`, add after line 4:
 
 ```ts
 import { collectMultipartParts, MultipartPart } from "./multipartParts";
@@ -526,7 +597,7 @@ Replace `putResourceWithSignedUrl` (lines 67-72) with:
     }
 ```
 
-Replace `listResourceMultipartUploadParts` (lines 146-156, including its comment) with:
+Replace `listResourceMultipartUploadParts` and its comment (lines 146-156) with:
 
 ```ts
     // Returns all uploaded parts for a multipart upload, used server-side to
@@ -552,19 +623,40 @@ Replace `listResourceMultipartUploadParts` (lines 146-156, including its comment
     }
 ```
 
-- [ ] **Step 6: Run tests and typecheck**
+- [ ] **Step 6: Stop rewriting part numbers by array position**
+
+`collectMultipartParts` now returns parts already sorted and carrying the numbers S3 reported, so the remapping in `index.server.ts` is both redundant and wrong — it renumbered parts by array index, which only ever matched on a single complete page.
+
+In `app/functions/handleFileUpload/index.server.ts`, replace lines 48-53:
+
+```ts
+    const parts = listedParts.map((part, index) => ({
+        ETag: part.ETag ?? "",
+        PartNumber: index + 1,
+    }));
+
+    await client.completeResourceMultipartUpload(resource.resourceId, resource.uploadId, parts);
+```
+
+with:
+
+```ts
+    await client.completeResourceMultipartUpload(resource.resourceId, resource.uploadId, listedParts);
+```
+
+- [ ] **Step 7: Run the full gate**
 
 Run: `yarn test`
 Expected: PASS.
 
-Run: `yarn typecheck`
-Expected: errors only in `useChunkedUpload.ts` and `index.server.ts`, which Tasks 5 and 6 replace.
+Run: `yarn typecheck` and `yarn lint`
+Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add app/storage/multipartParts.ts app/storage/multipartParts.test.ts app/storage/aws.server.tsx
-git commit -m "fix: paginate ListParts and set content type on single PUT"
+git add app/storage/multipartParts.ts app/storage/multipartParts.test.ts app/storage/aws.server.tsx app/functions/handleFileUpload/index.server.ts
+git commit -m "fix: paginate ListParts and preserve reported part numbers"
 ```
 
 ---
@@ -579,7 +671,7 @@ git commit -m "fix: paginate ListParts and set content type on single PUT"
 - Consumes: `UploadBucket`, `UploadSession` from Task 2.
 - Produces: `SignableSession = Pick<UploadSession, "mode" | "uploadId" | "resourceId" | "size">`; `getSignaturePayload(bucket: UploadBucket, session: SignableSession): string`.
 
-Splitting this out keeps it testable without importing `@/crypto`.
+Kept separate from `index.server.ts` so it is testable without importing `@/crypto`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -648,9 +740,12 @@ export function getSignaturePayload(bucket: UploadBucket, session: SignableSessi
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [ ] **Step 4: Run the full gate**
 
 Run: `yarn test`
+Expected: PASS.
+
+Run: `yarn typecheck` and `yarn lint`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
@@ -662,15 +757,20 @@ git commit -m "feat: make the upload signature payload unambiguous"
 
 ---
 
-### Task 5: Server session for both modes
+### Task 5: Server sessions and route action for both modes
 
 **Files:**
 - Modify: `app/functions/handleFileUpload/index.server.ts` (full rewrite)
+- Modify: `app/routes/dashboard.upload._index.ts` (full rewrite)
 - Test: `app/functions/handleFileUpload/session.server.test.ts` (create)
 
 **Interfaces:**
 - Consumes: Tasks 1-4.
 - Produces: `UploadStorageClient`; `createFileUploadSession(client, bucket, size, filename?, mimetype?): Promise<CreateUploadResponse>`; `getPresignedPartUrl(client, bucket, part, session): Promise<PartUploadResponse | null>`; `completeFileUploadSession(client, bucket, session): Promise<boolean>`; `abortFileUploadSession(client, bucket, session): Promise<boolean>`.
+
+The route is rewritten here rather than in a later task because it is the only consumer of these functions — splitting them would leave a commit that cannot typecheck.
+
+**The route has no automated test, deliberately.** The repo has no route-level test harness, and standing one up (a `Request`/`FormData` fixture plus a stubbed `db` and S3 module, both of which run side effects at import) is a larger change than this task. Every decision the action makes is covered elsewhere: size policy in Task 1, signature rejection in this task's tests, and the full wire shape in Task 6's fake server. Task 9 exercises it by hand.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -942,11 +1042,133 @@ export async function abortFileUploadSession(client: UploadStorageClient, bucket
 Run: `yarn test`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Rewrite the route action**
+
+`yarn typecheck` fails at this point — the route still calls the removed `getPresignedPUTUrl`. Replace the whole of `app/routes/dashboard.upload._index.ts` with:
+
+```ts
+import {
+    abortFileUploadSession,
+    completeFileUploadSession,
+    createFileUploadSession,
+    getPresignedPartUrl,
+} from "@/functions/handleFileUpload/index.server";
+import { UploadBucket, UploadMode, UploadSession } from "@/functions/handleFileUpload";
+import { getExpectedUploadPartCount, validateUpload } from "@/functions/handleFileUpload/validation";
+import { privateS3, publicS3 } from "@/storage/aws.server";
+import db from "@/db/client.server";
+import { downloadableFiles } from "@/db/schema";
+import { ActionFunctionArgs } from "react-router";
+
+function getBucket(value: FormDataEntryValue | null): UploadBucket | null {
+    return value === "media" || value === "download" ? value : null;
+}
+
+function getMode(value: FormDataEntryValue | null): UploadMode | null {
+    return value === "single" || value === "multipart" ? value : null;
+}
+
+export async function action({ request }: ActionFunctionArgs) {
+    if (request.method !== "POST")
+        throw new Response(null, { status: 405, headers: { Allow: "POST" } });
+
+    const formData = await request.formData();
+    const bucket = getBucket(formData.get("bucket"));
+    const intent = formData.get("intent");
+
+    if (!bucket || typeof intent !== "string")
+        throw new Response("Invalid upload request", { status: 400 });
+
+    const client = bucket === "media" ? publicS3 : privateS3;
+
+    if (intent === "create") {
+        const size = Number(formData.get("size"));
+        const error = validateUpload(bucket, size);
+        if (error)
+            throw new Response(error, { status: 400 });
+
+        return createFileUploadSession(client, bucket, size, String(formData.get("filename") || ""), String(formData.get("mimetype") || ""));
+    }
+
+    const mode = getMode(formData.get("mode"));
+    const session: UploadSession | null = mode && {
+        mode,
+        resourceId: String(formData.get("resourceId") || ""),
+        uploadId: String(formData.get("uploadId") || ""),
+        validate: String(formData.get("validate") || ""),
+        size: Number(formData.get("size")),
+    };
+
+    // A multipart session is meaningless without an uploadId; a single one must not carry one.
+    if (!session || !session.resourceId || !session.validate || validateUpload(bucket, session.size) ||
+        (session.mode === "multipart") !== Boolean(session.uploadId))
+        throw new Response("Invalid upload session", { status: 400 });
+
+    if (intent === "abort") {
+        const aborted = await abortFileUploadSession(client, bucket, session);
+        if (!aborted)
+            throw new Response("Invalid upload session", { status: 403 });
+        return { aborted: true };
+    }
+
+    if (intent === "part") {
+        if (session.mode !== "multipart")
+            throw new Response("Invalid upload part", { status: 400 });
+
+        const part = Number(formData.get("part"));
+        const expectedPartCount = getExpectedUploadPartCount(session.size);
+        if (!Number.isInteger(part) || part < 1 || part > expectedPartCount)
+            throw new Response("Invalid upload part", { status: 400 });
+
+        const presigned = await getPresignedPartUrl(client, bucket, part, session);
+        if (!presigned)
+            throw new Response("Invalid upload session", { status: 403 });
+        return presigned;
+    }
+
+    if (intent === "complete") {
+        const completed = await completeFileUploadSession(client, bucket, session);
+        if (!completed)
+            throw new Response("Invalid upload session", { status: 403 });
+
+        if (bucket === "download") {
+            try {
+                await db.insert(downloadableFiles).values({
+                    filename: session.resourceId,
+                    originalFilename: session.resourceId,
+                    fileSize: session.size,
+                    enabled: false,
+                    lifecycle: "draft",
+                });
+            } catch (error) {
+                try {
+                    await privateS3.deleteResource(session.resourceId);
+                } catch {
+                    // Preserve the database failure; object cleanup can be retried from storage logs.
+                }
+                throw error;
+            }
+        }
+        return { completed: true };
+    }
+
+    throw new Response("Unknown upload intent", { status: 400 });
+}
+```
+
+- [ ] **Step 6: Run the full gate**
+
+Run: `yarn test`
+Expected: PASS.
+
+Run: `yarn typecheck` and `yarn lint`
+Expected: PASS.
+
+- [ ] **Step 7: Commit**
 
 ```bash
-git add app/functions/handleFileUpload/index.server.ts app/functions/handleFileUpload/session.server.test.ts
-git commit -m "feat: support single and multipart upload sessions server-side"
+git add app/functions/handleFileUpload/index.server.ts app/functions/handleFileUpload/session.server.test.ts app/routes/dashboard.upload._index.ts
+git commit -m "feat: support single and multipart upload sessions"
 ```
 
 ---
@@ -956,11 +1178,12 @@ git commit -m "feat: support single and multipart upload sessions server-side"
 **Files:**
 - Create: `app/functions/handleFileUpload/uploadClient.ts`
 - Delete: `app/functions/handleFileUpload/useChunkedUpload.ts`
+- Modify: `app/components/upload/uploadingSection.tsx:1-5,38-47`
 - Test: `app/functions/handleFileUpload/uploadClient.test.ts` (create)
 
 **Interfaces:**
 - Consumes: Tasks 1-2.
-- Produces: `UploadedFileMetadata { file: File; size: number; type: string }`; `UploadDependencies { fetch: typeof fetch; delay: (ms: number) => Promise<void> }`; `isRetriableStatus(status: number): boolean`; `getRetryDelayMs(attempt: number, random?: () => number): number`; `runWithConcurrency(count: number, limit: number, worker: (index: number) => Promise<void>): Promise<void>`; `uploadFile(file, bucket, onProgress, options?): Promise<{ resourceId: string; metadata: UploadedFileMetadata }>`.
+- Produces: `UploadedFileMetadata { file: File; size: number; type: string }`; `UploadDependencies { fetch: typeof fetch; delay: (ms: number) => Promise<void> }`; `UploadFileOptions`; `isRetriableStatus(status: number): boolean`; `getRetryDelayMs(attempt: number, random?: () => number): number`; `runWithConcurrency(count: number, limit: number, worker: (index: number) => Promise<void>): Promise<void>`; `uploadFile(file, bucket, onProgress, options?): Promise<{ resourceId: string; metadata: UploadedFileMetadata }>`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1003,7 +1226,7 @@ test("runWithConcurrency runs every index exactly once", async () => {
         seen.push(index);
     });
 
-    assert.deepEqual(seen.sort((a, b) => a - b), [0, 1, 2, 3, 4, 5, 6]);
+    assert.deepEqual(seen.sort((first, second) => first - second), [0, 1, 2, 3, 4, 5, 6]);
 });
 
 test("runWithConcurrency never exceeds the concurrency limit", async () => {
@@ -1389,178 +1612,12 @@ export async function uploadFile(file: File, bucket: UploadBucket, onProgress: (
 }
 ```
 
-- [ ] **Step 4: Delete the old module**
-
-```bash
-git rm app/functions/handleFileUpload/useChunkedUpload.ts
-```
-
-- [ ] **Step 5: Run the test to verify it passes**
+- [ ] **Step 4: Run the test to verify it passes**
 
 Run: `yarn test`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
-
-```bash
-git add app/functions/handleFileUpload/uploadClient.ts app/functions/handleFileUpload/uploadClient.test.ts
-git commit -m "feat: route client uploads by size with parallel retrying parts"
-```
-
----
-
-### Task 7: Route action
-
-**Files:**
-- Modify: `app/routes/dashboard.upload._index.ts` (full rewrite)
-
-**Interfaces:**
-- Consumes: Tasks 1-5.
-- Produces: nothing new.
-
-**No automated test here, deliberately.** The repo has no route-level test harness, and standing one up (a `Request`/`FormData` fixture plus a stubbed `db` and S3 module) is a larger change than this task. Every decision the action makes is already covered: size policy in Task 1, signature rejection in Task 5, and the wire shape end-to-end in Task 6's fake server. The action itself is parse-and-dispatch. Task 10 exercises it by hand.
-
-- [ ] **Step 1: Rewrite the action**
-
-Replace the whole of `app/routes/dashboard.upload._index.ts` with:
-
-```ts
-import {
-    abortFileUploadSession,
-    completeFileUploadSession,
-    createFileUploadSession,
-    getPresignedPartUrl,
-} from "@/functions/handleFileUpload/index.server";
-import { UploadBucket, UploadMode, UploadSession } from "@/functions/handleFileUpload";
-import { getExpectedUploadPartCount, validateUpload } from "@/functions/handleFileUpload/validation";
-import { privateS3, publicS3 } from "@/storage/aws.server";
-import db from "@/db/client.server";
-import { downloadableFiles } from "@/db/schema";
-import { ActionFunctionArgs } from "react-router";
-
-function getBucket(value: FormDataEntryValue | null): UploadBucket | null {
-    return value === "media" || value === "download" ? value : null;
-}
-
-function getMode(value: FormDataEntryValue | null): UploadMode | null {
-    return value === "single" || value === "multipart" ? value : null;
-}
-
-export async function action({ request }: ActionFunctionArgs) {
-    if (request.method !== "POST")
-        throw new Response(null, { status: 405, headers: { Allow: "POST" } });
-
-    const formData = await request.formData();
-    const bucket = getBucket(formData.get("bucket"));
-    const intent = formData.get("intent");
-
-    if (!bucket || typeof intent !== "string")
-        throw new Response("Invalid upload request", { status: 400 });
-
-    const client = bucket === "media" ? publicS3 : privateS3;
-
-    if (intent === "create") {
-        const size = Number(formData.get("size"));
-        const error = validateUpload(bucket, size);
-        if (error)
-            throw new Response(error, { status: 400 });
-
-        return createFileUploadSession(client, bucket, size, String(formData.get("filename") || ""), String(formData.get("mimetype") || ""));
-    }
-
-    const mode = getMode(formData.get("mode"));
-    const session: UploadSession | null = mode && {
-        mode,
-        resourceId: String(formData.get("resourceId") || ""),
-        uploadId: String(formData.get("uploadId") || ""),
-        validate: String(formData.get("validate") || ""),
-        size: Number(formData.get("size")),
-    };
-
-    // A multipart session is meaningless without an uploadId; a single one must not carry one.
-    if (!session || !session.resourceId || !session.validate || validateUpload(bucket, session.size) ||
-        (session.mode === "multipart") !== Boolean(session.uploadId))
-        throw new Response("Invalid upload session", { status: 400 });
-
-    if (intent === "abort") {
-        const aborted = await abortFileUploadSession(client, bucket, session);
-        if (!aborted)
-            throw new Response("Invalid upload session", { status: 403 });
-        return { aborted: true };
-    }
-
-    if (intent === "part") {
-        if (session.mode !== "multipart")
-            throw new Response("Invalid upload part", { status: 400 });
-
-        const part = Number(formData.get("part"));
-        const expectedPartCount = getExpectedUploadPartCount(session.size);
-        if (!Number.isInteger(part) || part < 1 || part > expectedPartCount)
-            throw new Response("Invalid upload part", { status: 400 });
-
-        const presigned = await getPresignedPartUrl(client, bucket, part, session);
-        if (!presigned)
-            throw new Response("Invalid upload session", { status: 403 });
-        return presigned;
-    }
-
-    if (intent === "complete") {
-        const completed = await completeFileUploadSession(client, bucket, session);
-        if (!completed)
-            throw new Response("Invalid upload session", { status: 403 });
-
-        if (bucket === "download") {
-            try {
-                await db.insert(downloadableFiles).values({
-                    filename: session.resourceId,
-                    originalFilename: session.resourceId,
-                    fileSize: session.size,
-                    enabled: false,
-                    lifecycle: "draft",
-                });
-            } catch (error) {
-                try {
-                    await privateS3.deleteResource(session.resourceId);
-                } catch {
-                    // Preserve the database failure; object cleanup can be retried from storage logs.
-                }
-                throw error;
-            }
-        }
-        return { completed: true };
-    }
-
-    throw new Response("Unknown upload intent", { status: 400 });
-}
-```
-
-- [ ] **Step 2: Typecheck**
-
-Run: `yarn typecheck`
-Expected: errors remain only in `uploadingSection.tsx` and the two `route.tsx` loaders, fixed in Task 8.
-
-- [ ] **Step 3: Commit**
-
-```bash
-git add app/routes/dashboard.upload._index.ts
-git commit -m "feat: dispatch upload intents for both upload modes"
-```
-
----
-
-### Task 8: Wire the UI and drop dead reducer state
-
-**Files:**
-- Modify: `app/components/upload/uploadingSection.tsx:1-64`
-- Modify: `app/routes/dashboard.media.new._index/route.tsx:18,115-121`
-- Modify: `app/routes/dashboard.download.new._index/route.tsx:18`
-- Modify: `app/routes/dashboard.media.new._index/reducer.ts`
-
-**Interfaces:**
-- Consumes: Task 6's `uploadFile`, Task 1's `getMaxUploadSizeBytes`.
-- Produces: nothing new.
-
-- [ ] **Step 1: Point `UploadingSection` at `uploadFile`**
+- [ ] **Step 5: Point `UploadingSection` at `uploadFile` and delete the old module**
 
 In `app/components/upload/uploadingSection.tsx`, replace the import on lines 2-5 with:
 
@@ -1571,7 +1628,7 @@ import {
 } from "@/functions/handleFileUpload/uploadClient";
 ```
 
-Replace the `uploadFileInChunks` call on lines 38-47 with:
+and replace the call on lines 38-47 with:
 
 ```ts
           const result = await uploadFile(
@@ -1585,23 +1642,45 @@ Replace the `uploadFileInChunks` call on lines 38-47 with:
           );
 ```
 
-The `maxUploadSizeBytes` prop stays: `getMaxUploadSizeBytes` reads `process.env` and guards on `typeof process === "undefined"`, so the browser cannot resolve the configured cap without the loader passing it.
+The `maxUploadSizeBytes` prop stays: `getMaxUploadSizeBytes` reads `process.env` and guards on `typeof process === "undefined"`, so the browser cannot resolve the configured cap without the loader passing it. Client validation is advisory — the server re-validates on every intent.
 
-- [ ] **Step 2: Pass the bucket in both loaders**
+Then remove the superseded module:
 
-In `app/routes/dashboard.media.new._index/route.tsx` line 18:
-
-```ts
-  return { maxUploadSizeBytes: getMaxUploadSizeBytes("media") };
+```bash
+git rm app/functions/handleFileUpload/useChunkedUpload.ts
 ```
 
-In `app/routes/dashboard.download.new._index/route.tsx` line 18:
+- [ ] **Step 6: Run the full gate**
 
-```ts
-    return { maxUploadSizeBytes: getMaxUploadSizeBytes("download") };
+Run: `yarn test`
+Expected: PASS.
+
+Run: `yarn typecheck` and `yarn lint`
+Expected: PASS.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add app/functions/handleFileUpload app/components/upload/uploadingSection.tsx
+git commit -m "feat: route client uploads by size with parallel retrying parts"
 ```
 
-- [ ] **Step 3: Remove the never-dispatched reducer state**
+---
+
+### Task 7: Remove the superseded upload state
+
+**Files:**
+- Modify: `app/routes/dashboard.media.new._index/reducer.ts`
+- Modify: `app/routes/dashboard.media.new._index/route.tsx:120-121`
+- Modify: `app/functions/handleFileUpload/index.ts`
+
+**Interfaces:**
+- Consumes: nothing.
+- Produces: removes `ServerUploadResponse` and `UploadPart` from `index.ts`.
+
+`SET_UPLOAD_INFO` and `ADD_UPLOAD_SUCCESSFUL_CHUNK` are never dispatched; `uploadInfo` and `successfulChunks` are initialised at `route.tsx:120-121` and never read. They predate `UploadingSection` owning upload state. The reducer is the last consumer of `ServerUploadResponse` and `UploadPart`, so both types go with it.
+
+- [ ] **Step 1: Strip the reducer**
 
 Replace the whole of `app/routes/dashboard.media.new._index/reducer.ts` with:
 
@@ -1634,6 +1713,8 @@ export default function reducer(state: UploadInfo, action: Action) {
 }
 ```
 
+- [ ] **Step 2: Drop the dead initial state**
+
 In `app/routes/dashboard.media.new._index/route.tsx`, delete lines 120-121:
 
 ```ts
@@ -1641,29 +1722,28 @@ In `app/routes/dashboard.media.new._index/route.tsx`, delete lines 120-121:
     successfulChunks: [],
 ```
 
-- [ ] **Step 4: Typecheck and lint**
+- [ ] **Step 3: Remove the superseded types**
 
-Run: `yarn typecheck`
-Expected: PASS, no errors.
+In `app/functions/handleFileUpload/index.ts`, delete the `UploadPart` and `ServerUploadResponse` interfaces along with the comment introducing them.
 
-Run: `yarn lint`
-Expected: PASS.
-
-- [ ] **Step 5: Run the full suite**
+- [ ] **Step 4: Run the full gate**
 
 Run: `yarn test`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+Run: `yarn typecheck` and `yarn lint`
+Expected: PASS.
+
+- [ ] **Step 5: Commit**
 
 ```bash
-git add app/components/upload/uploadingSection.tsx app/routes/dashboard.media.new._index app/routes/dashboard.download.new._index/route.tsx
-git commit -m "feat: wire size-routed uploads into the dashboard"
+git add app/routes/dashboard.media.new._index app/functions/handleFileUpload/index.ts
+git commit -m "refactor: drop upload state superseded by UploadingSection"
 ```
 
 ---
 
-### Task 9: Widen `file_size` to BIGINT
+### Task 8: Widen `file_size` to BIGINT
 
 **Files:**
 - Modify: `app/db/schema.ts:98`
@@ -1697,9 +1777,12 @@ Expected: a new `.sql` file under `migrations/` containing
 
 Read the generated file and confirm it only touches `file_size`. If it contains unrelated drift, discard it and regenerate after reconciling the schema.
 
-- [ ] **Step 4: Typecheck**
+- [ ] **Step 4: Run the full gate**
 
-Run: `yarn typecheck`
+Run: `yarn test`
+Expected: PASS.
+
+Run: `yarn typecheck` and `yarn lint`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
@@ -1711,7 +1794,7 @@ git commit -m "feat: widen downloadable_file.file_size to bigint"
 
 ---
 
-### Task 10: Manual verification
+### Task 9: Manual verification
 
 **Files:** none.
 
@@ -1726,7 +1809,7 @@ Run: `yarn dev`
 
 - [ ] **Step 3: Verify the single-PUT path**
 
-Upload an image under 8 MiB at `/dashboard/media/new`. In the browser Network tab, expect exactly three requests to `/dashboard/upload` (`create`, `complete`) plus one PUT to R2 — and **no** `part` request. Confirm the object appears in the media list and renders.
+Upload an image under 8 MiB at `/dashboard/media/new`. In the browser Network tab, expect exactly two requests to `/dashboard/upload` (`create`, `complete`) plus one PUT to R2 — and **no** `part` request. Confirm the object appears in the media list and renders.
 
 - [ ] **Step 4: Verify the multipart path**
 
