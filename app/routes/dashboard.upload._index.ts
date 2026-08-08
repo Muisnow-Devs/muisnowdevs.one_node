@@ -30,7 +30,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
     if (intent === "create") {
         const size = Number(formData.get("size"));
-        const error = validateUpload(size);
+        const error = validateUpload(bucket, size);
         if (error)
             throw new Response(error, { status: 400 });
 
@@ -44,7 +44,7 @@ export async function action({ request }: ActionFunctionArgs) {
         size: Number(formData.get("size")),
     };
 
-    if (!resource.resourceId || !resource.uploadId || !resource.validate || validateUpload(resource.size))
+    if (!resource.resourceId || !resource.uploadId || !resource.validate || validateUpload(bucket, resource.size))
         throw new Response("Invalid upload session", { status: 400 });
 
     if (intent === "abort") {

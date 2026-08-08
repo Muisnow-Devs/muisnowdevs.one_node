@@ -19,6 +19,8 @@ export interface ServerUploadResponse {
 
 export type UploadBucket = "media" | "download";
 
+export type UploadMode = "single" | "multipart";
+
 export function getResourceId(bucket: UploadBucket, filename: string | undefined, generateId: () => string): string {
     const fileID = generateId();
     if (bucket === "download")

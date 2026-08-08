@@ -15,7 +15,7 @@ import { canFinalizeDownload } from "@/functions/downloadLifecycle";
 export const meta: MetaFunction = () => [{ title: "新增下載檔案 - Muisnow Devs" }];
 
 export function loader() {
-    return { maxUploadSizeBytes: getMaxUploadSizeBytes() };
+    return { maxUploadSizeBytes: getMaxUploadSizeBytes("download") };
 }
 
 export async function action({ request }: ActionFunctionArgs) {

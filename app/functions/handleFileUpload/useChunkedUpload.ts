@@ -1,12 +1,5 @@
 import { UploadBucket } from ".";
-import { getMaxUploadSizeBytes, UPLOAD_CHUNK_SIZE_BYTES, validateUploadSize } from "./validation";
-
-export function getUploadChunkRanges(size: number) {
-    const ranges: { start: number; end: number }[] = [];
-    for (let start = 0; start < size; start += UPLOAD_CHUNK_SIZE_BYTES)
-        ranges.push({ start, end: Math.min(start + UPLOAD_CHUNK_SIZE_BYTES, size) });
-    return ranges;
-}
+import { getMaxUploadSizeBytes, getUploadChunkRanges, validateUploadSize } from "./validation";
 
 export interface UploadedFileMetadata {
     file: File;
@@ -23,7 +16,7 @@ async function uploadRequest(data: Record<string, string | number>, signal?: Abo
     return response.json();
 }
 
-export async function uploadFileInChunks(file: File, bucket: UploadBucket, onProgress: (progress: number) => void, signal?: AbortSignal, maxUploadSizeBytes = getMaxUploadSizeBytes()) {
+export async function uploadFileInChunks(file: File, bucket: UploadBucket, onProgress: (progress: number) => void, signal?: AbortSignal, maxUploadSizeBytes = getMaxUploadSizeBytes(bucket)) {
     const validationError = validateUploadSize(file.size, maxUploadSizeBytes);
     if (validationError)
         throw new Error(validationError);

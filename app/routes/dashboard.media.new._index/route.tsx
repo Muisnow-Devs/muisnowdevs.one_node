@@ -15,7 +15,7 @@ import {
 } from "react-icons/fa";
 
 export function loader() {
-  return { maxUploadSizeBytes: getMaxUploadSizeBytes() };
+  return { maxUploadSizeBytes: getMaxUploadSizeBytes("media") };
 }
 
 export const meta: MetaFunction = () => {

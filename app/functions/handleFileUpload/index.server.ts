@@ -54,7 +54,7 @@ export async function completeFileUploadSession(client: S3Actions, bucket: Uploa
 
     try {
         const actualSize = await client.getResourceSizeDirect(resource.resourceId);
-        if (actualSize !== resource.size || validateUpload(actualSize)) {
+        if (actualSize !== resource.size || validateUpload(bucket, actualSize)) {
             await client.deleteResource(resource.resourceId);
             return false;
         }

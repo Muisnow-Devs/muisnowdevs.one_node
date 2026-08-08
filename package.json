@@ -7,6 +7,7 @@
     "build": "react-router build",
     "dev": "react-router dev",
     "lint": "eslint --cache --cache-location ./node_modules/.cache/eslint .",
+    "test": "node --env-file=.env --import tsx --test \"app/**/*.test.ts\"",
     "typecheck": "react-router typegen && tsc",
     "start": "HOST=127.0.0.1 PORT=6158 react-router-serve ./build/server/index.js",
     "start:noenv": "react-router-serve ./build/server/index.js",
