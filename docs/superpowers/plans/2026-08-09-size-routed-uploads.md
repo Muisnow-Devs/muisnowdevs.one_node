@@ -1253,6 +1253,8 @@ git commit -m "feat: support single and multipart upload sessions"
 - Create: `app/functions/handleFileUpload/uploadClient.ts`
 - Delete: `app/functions/handleFileUpload/useChunkedUpload.ts`
 - Modify: `app/components/upload/uploadingSection.tsx:1-5,38-47`
+- Modify: `app/routes/dashboard.media.new._index/route.tsx:2`
+- Modify: `app/routes/dashboard.download.new._index/route.tsx:4`
 - Test: `app/functions/handleFileUpload/uploadClient.test.ts` (create)
 
 **Interfaces:**
@@ -1718,6 +1720,20 @@ and replace the call on lines 38-47 with:
 
 The `maxUploadSizeBytes` prop stays: `getMaxUploadSizeBytes` reads `process.env` and guards on `typeof process === "undefined"`, so the browser cannot resolve the configured cap without the loader passing it. Client validation is advisory — the server re-validates on every intent.
 
+`uploadingSection.tsx` is not the only consumer. Two route files import the same type from the module being deleted, and both must be repointed in this commit or `yarn typecheck` fails. In `app/routes/dashboard.media.new._index/route.tsx:2` and `app/routes/dashboard.download.new._index/route.tsx:4`, replace:
+
+```ts
+import { UploadedFileMetadata } from "@/functions/handleFileUpload/useChunkedUpload";
+```
+
+with:
+
+```ts
+import { UploadedFileMetadata } from "@/functions/handleFileUpload/uploadClient";
+```
+
+Both are type-only uses (`route.tsx:33,124` in media; `route.tsx:57` in download), so no other line in either file changes.
+
 Then remove the superseded module:
 
 ```bash
@@ -1735,7 +1751,7 @@ Expected: PASS.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add app/functions/handleFileUpload app/components/upload/uploadingSection.tsx
+git add app/functions/handleFileUpload app/components/upload/uploadingSection.tsx app/routes/dashboard.media.new._index/route.tsx app/routes/dashboard.download.new._index/route.tsx
 git commit -m "feat: route client uploads by size with parallel retrying parts"
 ```
 
