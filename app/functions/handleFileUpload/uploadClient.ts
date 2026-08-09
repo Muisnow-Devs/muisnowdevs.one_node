@@ -9,17 +9,20 @@ export interface UploadedFileMetadata {
     file: File;
     size: number;
     type: string;
+    hash?: string;
 }
 
 export interface UploadDependencies {
     fetch: typeof fetch;
     delay: (ms: number) => Promise<void>;
+    hashFile: (file: Blob, signal?: AbortSignal) => Promise<string>;
 }
 
 export interface UploadFileOptions {
     signal?: AbortSignal;
     maxUploadSizeBytes?: number;
     concurrency?: number;
+    computeHash?: boolean;
     dependencies?: Partial<UploadDependencies>;
 }
 
@@ -55,10 +58,40 @@ class UploadRequestError extends Error {
     }
 }
 
+// Streams the file through an incremental hasher instead of reading it whole:
+// file.arrayBuffer() on a multi-gigabyte file fails outright with NotReadableError.
+// The wasm module is imported dynamically so it stays out of the SSR bundle —
+// this module is reached from route modules that server-render.
+async function hashFileStream(file: Blob, signal?: AbortSignal): Promise<string> {
+    const { createSHA1 } = await import("hash-wasm");
+    const hasher = await createSHA1();
+    hasher.init();
+
+    const reader = file.stream().getReader();
+
+    try {
+        while (true) {
+            if (signal?.aborted)
+                throw new DOMException("Aborted", "AbortError");
+
+            const { done, value } = await reader.read();
+            if (done)
+                break;
+
+            hasher.update(value);
+        }
+    } finally {
+        reader.cancel().catch(() => { /* the stream is already finished or failing */ });
+    }
+
+    return hasher.digest("hex");
+}
+
 function resolveDependencies(overrides?: Partial<UploadDependencies>): UploadDependencies {
     return {
         fetch: overrides?.fetch ?? ((...args: Parameters<typeof fetch>) => globalThis.fetch(...args)),
         delay: overrides?.delay ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms))),
+        hashFile: overrides?.hashFile ?? hashFileStream,
     };
 }
 
@@ -103,7 +136,7 @@ interface UploadCompletionState {
     issued: boolean;
 }
 
-async function uploadSingle(file: File, bucket: UploadBucket, session: CreateUploadResponse, onProgress: (progress: number) => void, dependencies: UploadDependencies, completion: UploadCompletionState, signal?: AbortSignal) {
+async function uploadSingle(file: File, bucket: UploadBucket, session: CreateUploadResponse, onProgress: (progress: number) => void, dependencies: UploadDependencies, completion: UploadCompletionState, hashPromise?: Promise<string>, signal?: AbortSignal) {
     if (!session.url)
         throw new Error("Upload session did not provide an upload target.");
 
@@ -111,11 +144,14 @@ async function uploadSingle(file: File, bucket: UploadBucket, session: CreateUpl
     // the header and the body size both have to match or R2 rejects the request.
     await putBody(dependencies, session.url, file, signal, file.type || "application/octet-stream");
     onProgress(1);
+    // Joining the hash here, before "complete" is issued, keeps a hash failure from
+    // stranding a draft row and a stored object: the catch in uploadFile still aborts.
+    await hashPromise;
     completion.issued = true;
     await uploadRequest(dependencies, { intent: "complete", bucket, ...toSessionFields(session) }, signal);
 }
 
-async function uploadMultipart(file: File, bucket: UploadBucket, session: UploadSession, onProgress: (progress: number) => void, dependencies: UploadDependencies, concurrency: number, completion: UploadCompletionState, signal?: AbortSignal) {
+async function uploadMultipart(file: File, bucket: UploadBucket, session: UploadSession, onProgress: (progress: number) => void, dependencies: UploadDependencies, concurrency: number, completion: UploadCompletionState, hashPromise?: Promise<string>, signal?: AbortSignal) {
     const ranges = getUploadChunkRanges(file.size);
     let uploadedBytes = 0;
 
@@ -157,6 +193,9 @@ async function uploadMultipart(file: File, bucket: UploadBucket, session: Upload
         }
     });
 
+    // Joining the hash here, before "complete" is issued, keeps a hash failure from
+    // stranding a draft row and a stored object: the catch in uploadFile still aborts.
+    await hashPromise;
     completion.issued = true;
     await uploadRequest(dependencies, { intent: "complete", bucket, ...toSessionFields(session) }, signal);
 }
@@ -179,14 +218,22 @@ export async function uploadFile(file: File, bucket: UploadBucket, onProgress: (
     }, signal);
 
     const completion: UploadCompletionState = { issued: false };
+    // Hashing runs alongside the transfer over its own sequential read of the file.
+    // It starts only once "create" has succeeded, so a rejected session leaves no
+    // orphaned read behind.
+    const hashPromise = options.computeHash ? dependencies.hashFile(file, signal) : undefined;
+    // The real await happens before "complete" in uploadSingle/uploadMultipart. This
+    // only stops an early rejection from being reported as an unhandled rejection while
+    // parts are still in flight; awaiting the same promise later still rethrows.
+    hashPromise?.catch(() => { });
 
     try {
         if (session.mode === "single")
-            await uploadSingle(file, bucket, session, onProgress, dependencies, completion, signal);
+            await uploadSingle(file, bucket, session, onProgress, dependencies, completion, hashPromise, signal);
         else
-            await uploadMultipart(file, bucket, session, onProgress, dependencies, options.concurrency ?? MAX_CONCURRENT_PARTS, completion, signal);
+            await uploadMultipart(file, bucket, session, onProgress, dependencies, options.concurrency ?? MAX_CONCURRENT_PARTS, completion, hashPromise, signal);
 
-        return { resourceId: session.resourceId, metadata: { file, size: file.size, type: file.type } satisfies UploadedFileMetadata };
+        return { resourceId: session.resourceId, metadata: { file, size: file.size, type: file.type, hash: await hashPromise } satisfies UploadedFileMetadata };
     } catch (error) {
         // Never abort once "complete" has left the client. A complete can succeed on the
         // server and still throw here — a dropped connection or a timeout loses the
