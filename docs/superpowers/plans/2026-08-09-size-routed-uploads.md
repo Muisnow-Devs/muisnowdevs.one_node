@@ -556,6 +556,22 @@ test("collectMultipartParts throws when the listing exceeds the part ceiling", a
         return { parts: [{ ETag: "a", PartNumber: next }], nextMarker: String(next), isTruncated: true };
     }, 2), /more than 2 parts/);
 });
+
+test("collectMultipartParts stops when the server paginates forever without returning parts", async () => {
+    let calls = 0;
+
+    await assert.rejects(
+        () => collectMultipartParts(async () => {
+            calls += 1;
+            return { parts: [], nextMarker: `marker-${calls}`, isTruncated: true };
+        }, 2),
+        /did not finish within 3 pages/,
+    );
+
+    // Empty pages with an ever-fresh marker grow neither the collected list nor the
+    // repeated-marker set, so only a bound independent of page contents stops them.
+    assert.equal(calls, 3);
+});
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
@@ -582,20 +598,30 @@ export interface PartsPage {
 // ListParts returns at most 1000 parts per page. A file large enough to need more
 // would otherwise fail its completion check after every byte had already uploaded.
 //
-// Both guards below throw rather than returning a short list: the caller compares the
+// The guards below throw rather than returning a short list: the caller compares the
 // returned count against the expected part count, so a silently truncated list looks
 // exactly like an incomplete upload. A server that reports truncation while re-issuing
 // a marker it already handed out would otherwise be re-fetched until the process died.
+// The page bound also covers pages carrying no parts at all, so no page shape can spin
+// the loop forever. Its ceiling is one page beyond the part ceiling because a server
+// returning a single part per page needs maxParts pages to reach the limit legitimately;
+// the looser bound leaves the more specific part-count error to fire first and makes this
+// purely a backstop.
 export async function collectMultipartParts(
     fetchPage: (marker?: string) => Promise<PartsPage>,
     maxParts: number,
 ): Promise<MultipartPart[]> {
+    const maxPages = maxParts + 1;
     const collected: MultipartPart[] = [];
     const seenMarkers = new Set<string>();
     let marker: string | undefined = undefined;
+    let pagesFetched = 0;
     let truncated = true;
 
     while (truncated) {
+        if (++pagesFetched > maxPages)
+            throw new Error(`ListParts did not finish within ${maxPages} pages.`);
+
         const page = await fetchPage(marker);
         collected.push(...page.parts);
 
