@@ -151,6 +151,13 @@ export async function registerCompletedDownload(client: Pick<UploadStorageClient
 // complete, so a replayed abort must not be allowed to delete a completed,
 // DB-registered object. Media uploads have no DB row to consult, so this
 // guard only applies to downloads — that is a known, accepted limitation.
+//
+// The existence check is also best-effort against a concurrent complete: it
+// only sees committed rows, so an abort racing a complete whose INSERT has
+// not yet landed can still slip through and delete the object. Closing that
+// gap would need a transaction or a distributed lock, which is disproportionate
+// to the risk — the loser is a compensating delete that registerCompletedDownload
+// already treats as recoverable via its duplicate-key replay path.
 export async function abortDownloadUpload(client: UploadStorageClient, bucket: UploadBucket, session: UploadSession, hasExistingRow: () => Promise<boolean>): Promise<boolean> {
     if (bucket === "download" && await hasExistingRow())
         throw new Response("Upload already completed", { status: 409 });

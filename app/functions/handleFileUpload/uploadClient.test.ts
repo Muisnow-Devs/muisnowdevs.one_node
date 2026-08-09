@@ -77,14 +77,18 @@ interface FakeServerOptions {
     delayPart?: (part: number) => number;
     onPut?: (part: number) => void;
     failComplete?: () => number | "network" | null;
+    // When set, "abort" 403s unless it carries the most recently issued "validate" —
+    // the real server always does this; the other fake servers above never validate it.
+    requireCurrentSignatureOnAbort?: boolean;
 }
 
 function createFakeServer(mode: "single" | "multipart", options: FakeServerOptions = {}) {
     const attempts = new Map<number, number>();
     const putOrder: number[] = [];
     const intents: string[] = [];
+    let latestSignature = "signature-0";
+    let abortAccepted: boolean | undefined;
 
-    // eslint-disable-next-line no-undef -- RequestInfo/RequestInit are DOM lib types, not runtime globals.
     const fetchImpl = async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
 
@@ -99,13 +103,14 @@ function createFakeServer(mode: "single" | "multipart", options: FakeServerOptio
                     resourceId: "resource-1",
                     uploadId: mode === "multipart" ? "upload-1" : "",
                     size: Number(body.get("size")),
-                    validate: "signature-0",
+                    validate: latestSignature,
                     url: mode === "single" ? "https://example.test/put/0" : undefined,
                 });
 
             if (intent === "part") {
                 const part = Number(body.get("part"));
-                return Response.json({ url: `https://example.test/put/${part}`, validate: `signature-${part}` });
+                latestSignature = `signature-${part}`;
+                return Response.json({ url: `https://example.test/put/${part}`, validate: latestSignature });
             }
 
             if (intent === "complete") {
@@ -114,6 +119,12 @@ function createFakeServer(mode: "single" | "multipart", options: FakeServerOptio
                     throw new TypeError("network failure");
                 if (typeof failure === "number")
                     return new Response("rejected", { status: failure });
+            }
+
+            if (intent === "abort" && options.requireCurrentSignatureOnAbort) {
+                abortAccepted = String(body.get("validate")) === latestSignature;
+                if (!abortAccepted)
+                    return new Response("stale signature", { status: 403 });
             }
 
             return Response.json({ ok: true });
@@ -145,7 +156,7 @@ function createFakeServer(mode: "single" | "multipart", options: FakeServerOptio
         delay: async () => { /* retry backoff is not worth real time in a test */ },
     };
 
-    return { dependencies, attempts, putOrder, intents };
+    return { dependencies, attempts, putOrder, intents, getAbortAccepted: () => abortAccepted };
 }
 
 test("a small file uploads with one PUT and never requests a part url", async () => {
@@ -256,4 +267,22 @@ test("an abort mid-upload stops retrying instead of spending its remaining attem
     }));
 
     assert.equal(server.attempts.get(1), 1);
+});
+
+test("the compensating abort carries the signature rolled by the last successful part, not the one from create", async () => {
+    // Part 1 succeeds and rolls the signature forward; part 2 fails every attempt, so
+    // the catch block's abort must use the rolled signature or the fake server 403s it,
+    // exactly as the real server would once the original "create" signature has moved on.
+    const server = createFakeServer("multipart", {
+        failPart: (part) => part === 2 ? 500 : null,
+        requireCurrentSignatureOnAbort: true,
+    });
+
+    await assert.rejects(uploadFile(createFile(SINGLE_PUT_MAX_BYTES + 1), "download", () => { }, {
+        concurrency: 1,
+        dependencies: server.dependencies,
+    }));
+
+    assert.ok(server.intents.includes("abort"));
+    assert.equal(server.getAbortAccepted(), true);
 });

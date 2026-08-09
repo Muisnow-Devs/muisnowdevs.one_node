@@ -117,9 +117,6 @@ async function uploadSingle(file: File, bucket: UploadBucket, session: CreateUpl
 
 async function uploadMultipart(file: File, bucket: UploadBucket, session: UploadSession, onProgress: (progress: number) => void, dependencies: UploadDependencies, concurrency: number, completion: UploadCompletionState, signal?: AbortSignal) {
     const ranges = getUploadChunkRanges(file.size);
-    // Every re-issued signature stays valid for its own 60 minutes, so parallel
-    // workers can simply keep the most recent one they have seen.
-    let validate = session.validate;
     let uploadedBytes = 0;
 
     await runWithConcurrency(ranges.length, concurrency, async (index) => {
@@ -135,10 +132,13 @@ async function uploadMultipart(file: File, bucket: UploadBucket, session: Upload
                     intent: "part",
                     bucket,
                     part: index + 1,
-                    ...toSessionFields({ ...session, validate }),
+                    ...toSessionFields(session),
                 }, signal);
 
-                validate = part.validate;
+                // Every re-issued signature stays valid for its own 60 minutes, so parallel
+                // workers can simply keep the most recent one they have seen. Writing it back
+                // onto the session keeps both "complete" and a compensating "abort" current.
+                session.validate = part.validate;
                 await putBody(dependencies, part.url, chunk, signal);
 
                 uploadedBytes += chunk.size;
@@ -158,7 +158,7 @@ async function uploadMultipart(file: File, bucket: UploadBucket, session: Upload
     });
 
     completion.issued = true;
-    await uploadRequest(dependencies, { intent: "complete", bucket, ...toSessionFields({ ...session, validate }) }, signal);
+    await uploadRequest(dependencies, { intent: "complete", bucket, ...toSessionFields(session) }, signal);
 }
 
 export async function uploadFile(file: File, bucket: UploadBucket, onProgress: (progress: number) => void, options: UploadFileOptions = {}) {

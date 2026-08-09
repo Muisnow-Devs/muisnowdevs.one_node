@@ -12,10 +12,15 @@ export interface PartsPage {
 // ListParts returns at most 1000 parts per page. A file large enough to need more
 // would otherwise fail its completion check after every byte had already uploaded.
 //
-// All three guards below throw rather than returning a short list: the caller compares the
+// The three guards below throw rather than returning a short list: the caller compares the
 // returned count against the expected part count, so a silently truncated list looks
 // exactly like an incomplete upload. A server that reports truncation while re-issuing
 // a marker it already handed out would otherwise be re-fetched until the process died.
+//
+// The loop's own exit condition is the deliberate exception: a truncated page that omits
+// its marker (`truncated = page.isTruncated && marker !== undefined`, below) has nothing
+// left to page with, so the loop stops and returns whatever was collected — silently short
+// if the server's truncation flag was accurate. multipartParts.test.ts pins that behavior.
 //
 // The page count guard covers what those two miss: a page that carries no parts at all
 // but a fresh marker every call trips neither the part-count check nor the repeated-marker

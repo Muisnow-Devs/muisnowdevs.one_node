@@ -61,7 +61,7 @@ export async function action({ request }: ActionFunctionArgs) {
         const aborted = await abortDownloadUpload(client, bucket, session, async () => {
             const existing = await db.select({ id: downloadableFiles.id })
                 .from(downloadableFiles)
-                .where(eq(downloadableFiles.filename, session.resourceId))
+                .where(eq(downloadableFiles.originalFilename, session.resourceId))
                 .limit(1);
             return existing.length > 0;
         });
