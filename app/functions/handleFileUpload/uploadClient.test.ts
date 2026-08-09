@@ -269,6 +269,80 @@ test("an abort mid-upload stops retrying instead of spending its remaining attem
     assert.equal(server.attempts.get(1), 1);
 });
 
+test("the real streaming hash matches crypto.subtle's SHA-1 of the same bytes", async () => {
+    // Pins hash-wasm to genuine SHA-1 instead of trusting the library. The default
+    // (non-injected) hashFile runs here, so this also covers the streaming reader.
+    const bytes = new Uint8Array(200_000);
+    for (let index = 0; index < bytes.length; index++)
+        bytes[index] = (index * 31 + 7) % 256;
+
+    const server = createFakeServer("single");
+    const file = new File([bytes], "hashed.bin", { type: "application/octet-stream" });
+
+    const result = await uploadFile(file, "media", () => { }, {
+        computeHash: true,
+        dependencies: server.dependencies,
+    });
+
+    const digest = await crypto.subtle.digest("SHA-1", bytes);
+    const expected = Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, "0")).join("");
+    assert.equal(result.metadata.hash, expected);
+});
+
+test("a multipart upload returns the hash computed alongside the parts", async () => {
+    const server = createFakeServer("multipart");
+
+    const result = await uploadFile(createFile(SINGLE_PUT_MAX_BYTES + 1), "download", () => { }, {
+        computeHash: true,
+        dependencies: { ...server.dependencies, hashFile: async () => "deadbeef" },
+    });
+
+    assert.equal(result.metadata.hash, "deadbeef");
+    assert.ok(server.intents.includes("complete"));
+});
+
+test("a hash failure blocks complete and triggers the compensating abort", async () => {
+    // The hash must be joined before "complete" is issued. If it were joined after,
+    // registerCompletedDownload would already have inserted a draft row for an object
+    // this upload then reports as failed — the stranded-draft bug this ordering prevents.
+    const server = createFakeServer("multipart");
+
+    await assert.rejects(uploadFile(createFile(SINGLE_PUT_MAX_BYTES + 1), "download", () => { }, {
+        computeHash: true,
+        concurrency: 1,
+        dependencies: { ...server.dependencies, hashFile: async () => { throw new Error("hash failed"); } },
+    }), /hash failed/);
+
+    assert.ok(!server.intents.includes("complete"));
+    assert.ok(server.intents.includes("abort"));
+});
+
+test("a hash failure blocks complete on the single-PUT path too", async () => {
+    // Same ordering guarantee as above, on the other upload path.
+    const server = createFakeServer("single");
+
+    await assert.rejects(uploadFile(createFile(1024), "download", () => { }, {
+        computeHash: true,
+        dependencies: { ...server.dependencies, hashFile: async () => { throw new Error("hash failed"); } },
+    }), /hash failed/);
+
+    assert.ok(!server.intents.includes("complete"));
+    assert.ok(server.intents.includes("abort"));
+});
+
+test("an upload without computeHash never hashes and reports no hash", async () => {
+    // The media bucket has no use for a checksum and must not pay to read the file twice.
+    const server = createFakeServer("single");
+    let hashCalls = 0;
+
+    const result = await uploadFile(createFile(1024), "media", () => { }, {
+        dependencies: { ...server.dependencies, hashFile: async () => { hashCalls++; return "unused"; } },
+    });
+
+    assert.equal(hashCalls, 0);
+    assert.equal(result.metadata.hash, undefined);
+});
+
 test("the compensating abort carries the signature rolled by the last successful part, not the one from create", async () => {
     // Part 1 succeeds and rolls the signature forward; part 2 fails every attempt, so
     // the catch block's abort must use the rolled signature or the fake server 403s it,
