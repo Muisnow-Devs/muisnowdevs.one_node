@@ -1,61 +1,82 @@
 import { sign, verify } from "@/crypto";
-import { S3Actions } from "@/storage/aws.server";
+// Type-only: a value import would pull in redis.server.tsx, which opens a Redis
+// connection at module load and would hang unit tests.
+import type { S3Actions } from "@/storage/aws.server";
 import { v4 } from "uuid";
-import { getResourceId, ServerUploadResponse, UploadBucket } from ".";
-import { getExpectedUploadPartCount, validateUpload } from "./validation";
+import { CreateUploadResponse, getResourceId, PartUploadResponse, UploadBucket, UploadSession } from ".";
+import { getSignaturePayload } from "./signature";
+import { getExpectedUploadPartCount, getUploadMode, validateUpload } from "./validation";
 
-function getSignaturePayload(bucket: UploadBucket, uploadId: string, resourceId: string, size: number) {
-    return [bucket, uploadId, resourceId, size].join(':');
+export type UploadStorageClient = Pick<S3Actions,
+    | "putResourceWithSignedUrl"
+    | "createResourceMultipartUpload"
+    | "uploadResourcePartWithSignedUrl"
+    | "listResourceMultipartUploadParts"
+    | "completeResourceMultipartUpload"
+    | "abortResourceMultipartUpload"
+    | "getResourceSizeDirect"
+    | "deleteResource">;
+
+function hasValidSignature(bucket: UploadBucket, session: UploadSession) {
+    return verify(getSignaturePayload(bucket, session), session.validate);
 }
 
-function hasValidSignature(bucket: UploadBucket, resource: ServerUploadResponse) {
-    return verify(getSignaturePayload(bucket, resource.uploadId, resource.resourceId, resource.size), resource.validate);
-}
-
-export async function createFileUploadSession(client: S3Actions, bucket: UploadBucket, size: number, filename?: string, mimetype?: string): Promise<ServerUploadResponse> {
+export async function createFileUploadSession(client: UploadStorageClient, bucket: UploadBucket, size: number, filename?: string, mimetype?: string): Promise<CreateUploadResponse> {
     const resourceId = getResourceId(bucket, filename, v4);
+    const mode = getUploadMode(size);
+    const contentType = mimetype || "application/octet-stream";
 
-    const session = await client.createResourceMultipartUpload(resourceId, mimetype);
-    const signature = sign(getSignaturePayload(bucket, session.UploadId || "", resourceId, size));
+    if (mode === "single") {
+        const url = await client.putResourceWithSignedUrl(resourceId, contentType);
+        const session = { mode, resourceId, uploadId: "", size };
+        return { ...session, validate: sign(getSignaturePayload(bucket, session)), url };
+    }
 
-    return {
-        resourceId,
-        uploadId: session.UploadId || "",
-        validate: signature,
-        size,
-    };
+    const created = await client.createResourceMultipartUpload(resourceId, contentType);
+    const session = { mode, resourceId, uploadId: created.UploadId || "", size };
+    return { ...session, validate: sign(getSignaturePayload(bucket, session)) };
 }
 
-export async function getPresignedPUTUrl(client: S3Actions, bucket: UploadBucket, part: number, resource: ServerUploadResponse): Promise<string | null> {
-    if (!hasValidSignature(bucket, resource))
-        return null
-    return client.uploadResourcePartWithSignedUrl(resource.resourceId, part, resource.uploadId);
+export async function getPresignedPartUrl(client: UploadStorageClient, bucket: UploadBucket, part: number, session: UploadSession): Promise<PartUploadResponse | null> {
+    if (!hasValidSignature(bucket, session))
+        return null;
+
+    const url = await client.uploadResourcePartWithSignedUrl(session.resourceId, part, session.uploadId);
+
+    // Signatures expire 60 minutes after issue, so a multi-gigabyte upload would
+    // outlive its own session. Re-issuing here keeps the session alive as long as
+    // parts keep flowing, without widening the replay window of any one signature.
+    return { url, validate: sign(getSignaturePayload(bucket, session)) };
 }
 
-export async function completeFileUploadSession(client: S3Actions, bucket: UploadBucket, resource: ServerUploadResponse): Promise<boolean> {
-    if (!hasValidSignature(bucket, resource))
+export async function completeFileUploadSession(client: UploadStorageClient, bucket: UploadBucket, session: UploadSession): Promise<boolean> {
+    if (!hasValidSignature(bucket, session))
         return false;
 
-    // Retrieve parts (with ETags) from R2 server-side — this avoids the need for
-    // the browser to read ETag from the presigned PUT response, which requires
-    // CORS Access-Control-Expose-Headers: ETag to be configured on the R2 bucket.
-    const listedParts = await client.listResourceMultipartUploadParts(resource.resourceId, resource.uploadId);
-    const expectedPartCount = getExpectedUploadPartCount(resource.size);
+    if (session.mode === "multipart") {
+        // Retrieve parts (with ETags) from R2 server-side — this avoids the need for
+        // the browser to read ETag from the presigned PUT response, which requires
+        // CORS Access-Control-Expose-Headers: ETag to be configured on the R2 bucket.
+        const listedParts = await client.listResourceMultipartUploadParts(session.resourceId, session.uploadId);
 
-    if (listedParts.length !== expectedPartCount)
-        return false;
+        if (listedParts.length !== getExpectedUploadPartCount(session.size)) {
+            // Leaving the upload open would accrue storage cost for parts nobody can finish.
+            await client.abortResourceMultipartUpload(session.resourceId, session.uploadId);
+            return false;
+        }
 
-    await client.completeResourceMultipartUpload(resource.resourceId, resource.uploadId, listedParts);
+        await client.completeResourceMultipartUpload(session.resourceId, session.uploadId, listedParts);
+    }
 
     try {
-        const actualSize = await client.getResourceSizeDirect(resource.resourceId);
-        if (actualSize !== resource.size || validateUpload(bucket, actualSize)) {
-            await client.deleteResource(resource.resourceId);
+        const actualSize = await client.getResourceSizeDirect(session.resourceId);
+        if (actualSize !== session.size || validateUpload(bucket, actualSize)) {
+            await client.deleteResource(session.resourceId);
             return false;
         }
     } catch (error) {
         try {
-            await client.deleteResource(resource.resourceId);
+            await client.deleteResource(session.resourceId);
         } catch {
             // Preserve the validation failure; storage logs retain any failed compensation attempt.
         }
@@ -65,10 +86,19 @@ export async function completeFileUploadSession(client: S3Actions, bucket: Uploa
     return true;
 }
 
-export async function abortFileUploadSession(client: S3Actions, bucket: UploadBucket, resource: ServerUploadResponse): Promise<boolean> {
-    if (!hasValidSignature(bucket, resource))
+export async function abortFileUploadSession(client: UploadStorageClient, bucket: UploadBucket, session: UploadSession): Promise<boolean> {
+    if (!hasValidSignature(bucket, session))
         return false;
 
-    await client.abortResourceMultipartUpload(resource.resourceId, resource.uploadId);
+    if (session.mode === "single") {
+        try {
+            await client.deleteResource(session.resourceId);
+        } catch {
+            // A single PUT that never started leaves nothing to delete.
+        }
+        return true;
+    }
+
+    await client.abortResourceMultipartUpload(session.resourceId, session.uploadId);
     return true;
 }
