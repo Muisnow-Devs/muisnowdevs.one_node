@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import { boolean, customType, index, int, mysqlTable, primaryKey, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { bigint, boolean, customType, index, int, mysqlTable, primaryKey, text, timestamp, varchar } from "drizzle-orm/mysql-core";
 import { v4 } from "uuid";
 import type { DownloadLifecycle } from "@/functions/downloadLifecycle";
 
@@ -95,7 +95,7 @@ export const downloadableFiles = mysqlTable("downloadable_file", {
         .$defaultFn(() => v4()),
     fileImage: varchar("file_image", { length: 40 }),
     fileType: varchar("file_type", { length: 128 }),
-    fileSize: int("file_size"),
+    fileSize: bigint("file_size", { mode: "number" }),
     hash: varchar("hash", { length: 40 }),
     isS3: boolean("s3")
         .notNull()
