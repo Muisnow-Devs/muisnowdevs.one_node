@@ -68,3 +68,19 @@ test("collectMultipartParts throws when the listing exceeds the part ceiling", a
         return { parts: [{ ETag: "a", PartNumber: next }], nextMarker: String(next), isTruncated: true };
     }, 2), /more than 2 parts/);
 });
+
+test("collectMultipartParts stops when the server paginates forever without returning parts", async () => {
+    let calls = 0;
+
+    await assert.rejects(
+        () => collectMultipartParts(async () => {
+            calls += 1;
+            return { parts: [], nextMarker: `marker-${calls}`, isTruncated: true };
+        }, 2),
+        /did not finish within 3 pages/,
+    );
+
+    // Empty pages with an ever-fresh marker grow neither the collected list nor the
+    // repeated-marker set, so only a bound independent of page contents stops them.
+    assert.equal(calls, 3);
+});
