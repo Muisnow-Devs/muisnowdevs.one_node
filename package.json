@@ -33,6 +33,7 @@
     "file-type": "^22.0.1",
     "is-ip": "^5.0.1",
     "isbot": "^5.2.1",
+    "jose": "^6.2.8",
     "mdast": "^3.0.0",
     "mysql2": "^3.23.1",
     "react": "^19.2.7",
@@ -52,8 +53,8 @@
     "uuid": "^14.0.1"
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
     "@eslint/compat": "^2.1.0",
+    "@eslint/js": "^10.0.1",
     "@react-router/dev": "7.18.1",
     "@types/mdast": "^4.0.4",
     "@types/node": "^26.1.1",
