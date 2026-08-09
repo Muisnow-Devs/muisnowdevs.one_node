@@ -598,7 +598,7 @@ export interface PartsPage {
 // ListParts returns at most 1000 parts per page. A file large enough to need more
 // would otherwise fail its completion check after every byte had already uploaded.
 //
-// The guards below throw rather than returning a short list: the caller compares the
+// All three guards below throw rather than returning a short list: the caller compares the
 // returned count against the expected part count, so a silently truncated list looks
 // exactly like an incomplete upload. A server that reports truncation while re-issuing
 // a marker it already handed out would otherwise be re-fetched until the process died.
