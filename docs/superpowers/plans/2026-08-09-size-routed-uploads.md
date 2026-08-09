@@ -1344,6 +1344,7 @@ interface FakeServerOptions {
     failPart?: (part: number, attempt: number) => number | "network" | null;
     delayPart?: (part: number) => number;
     onPut?: (part: number) => void;
+    failComplete?: () => number | "network" | null;
 }
 
 function createFakeServer(mode: "single" | "multipart", options: FakeServerOptions = {}) {
@@ -1372,6 +1373,14 @@ function createFakeServer(mode: "single" | "multipart", options: FakeServerOptio
             if (intent === "part") {
                 const part = Number(body.get("part"));
                 return Response.json({ url: `https://example.test/put/${part}`, validate: `signature-${part}` });
+            }
+
+            if (intent === "complete") {
+                const failure = options.failComplete?.() ?? null;
+                if (failure === "network")
+                    throw new TypeError("network failure");
+                if (typeof failure === "number")
+                    return new Response("rejected", { status: failure });
             }
 
             return Response.json({ ok: true });
@@ -1444,7 +1453,36 @@ test("a failing part is retried three times and then gives up", async () => {
     }));
 
     assert.equal(server.attempts.get(1), 3);
+    // The failure happened before "complete" was issued, so compensating is still correct.
     assert.ok(server.intents.includes("abort"));
+});
+
+test("a single upload whose complete response is lost is never aborted", async () => {
+    // The object can be stored and the response still lost. Aborting on that error would
+    // delete what was just written, and a media upload leaves no row behind to notice.
+    const server = createFakeServer("single", { failComplete: () => "network" });
+
+    await assert.rejects(uploadFile(createFile(1024), "media", () => { }, {
+        dependencies: server.dependencies,
+    }));
+
+    assert.ok(server.intents.includes("complete"));
+    assert.ok(!server.intents.includes("abort"));
+});
+
+test("a multipart upload whose complete fails is never aborted", async () => {
+    // The client cannot tell a lost response from a genuine failure, so it must not
+    // compensate either way. A complete that fails its part-count check already aborts
+    // the upload server-side.
+    const server = createFakeServer("multipart", { failComplete: () => 500 });
+
+    await assert.rejects(uploadFile(createFile(SINGLE_PUT_MAX_BYTES + 1), "download", () => { }, {
+        concurrency: 1,
+        dependencies: server.dependencies,
+    }));
+
+    assert.ok(server.intents.includes("complete"));
+    assert.ok(!server.intents.includes("abort"));
 });
 
 test("a 4xx part failure fails immediately without retrying", async () => {
@@ -1597,18 +1635,25 @@ async function putBody(dependencies: UploadDependencies, url: string, body: Blob
         throw new UploadRequestError("Unable to upload file data.", response.status);
 }
 
-async function uploadSingle(file: File, bucket: UploadBucket, session: CreateUploadResponse, onProgress: (progress: number) => void, dependencies: UploadDependencies, signal?: AbortSignal) {
+// Set the instant before "complete" leaves the client, so a lost response cannot be
+// mistaken for an upload that never landed. See uploadFile for why that matters.
+interface UploadCompletionState {
+    issued: boolean;
+}
+
+async function uploadSingle(file: File, bucket: UploadBucket, session: CreateUploadResponse, onProgress: (progress: number) => void, dependencies: UploadDependencies, completion: UploadCompletionState, signal?: AbortSignal) {
     if (!session.url)
         throw new Error("Upload session did not provide an upload target.");
 
-    // The server signed this exact content type into the presigned URL, so the
-    // header has to match or S3 rejects the request.
+    // The server signed this exact content type and length into the presigned URL, so
+    // the header and the body size both have to match or R2 rejects the request.
     await putBody(dependencies, session.url, file, signal, file.type || "application/octet-stream");
     onProgress(1);
+    completion.issued = true;
     await uploadRequest(dependencies, { intent: "complete", bucket, ...toSessionFields(session) }, signal);
 }
 
-async function uploadMultipart(file: File, bucket: UploadBucket, session: UploadSession, onProgress: (progress: number) => void, dependencies: UploadDependencies, concurrency: number, signal?: AbortSignal) {
+async function uploadMultipart(file: File, bucket: UploadBucket, session: UploadSession, onProgress: (progress: number) => void, dependencies: UploadDependencies, concurrency: number, completion: UploadCompletionState, signal?: AbortSignal) {
     const ranges = getUploadChunkRanges(file.size);
     // Every re-issued signature stays valid for its own 60 minutes, so parallel
     // workers can simply keep the most recent one they have seen.
@@ -1650,6 +1695,7 @@ async function uploadMultipart(file: File, bucket: UploadBucket, session: Upload
         }
     });
 
+    completion.issued = true;
     await uploadRequest(dependencies, { intent: "complete", bucket, ...toSessionFields({ ...session, validate }) }, signal);
 }
 
@@ -1670,19 +1716,30 @@ export async function uploadFile(file: File, bucket: UploadBucket, onProgress: (
         size: file.size,
     }, signal);
 
+    const completion: UploadCompletionState = { issued: false };
+
     try {
         if (session.mode === "single")
-            await uploadSingle(file, bucket, session, onProgress, dependencies, signal);
+            await uploadSingle(file, bucket, session, onProgress, dependencies, completion, signal);
         else
-            await uploadMultipart(file, bucket, session, onProgress, dependencies, options.concurrency ?? MAX_CONCURRENT_PARTS, signal);
+            await uploadMultipart(file, bucket, session, onProgress, dependencies, options.concurrency ?? MAX_CONCURRENT_PARTS, completion, signal);
 
         return { resourceId: session.resourceId, metadata: { file, size: file.size, type: file.type } satisfies UploadedFileMetadata };
     } catch (error) {
-        try {
-            await uploadRequest(dependencies, { intent: "abort", bucket, ...toSessionFields(session) });
-        } catch {
-            // The original failure is more useful; an expired/completed upload may no longer be abortable.
-        }
+        // Never abort once "complete" has left the client. A complete can succeed on the
+        // server and still throw here — a dropped connection or a timeout loses the
+        // response, not the upload — and aborting then deletes the object that was just
+        // stored. A media upload leaves no database row behind, so nothing would notice.
+        //
+        // Skipping the abort cannot strand a multipart upload either: a complete that
+        // fails its part-count check already aborts the upload server-side before returning.
+        if (!completion.issued)
+            try {
+                await uploadRequest(dependencies, { intent: "abort", bucket, ...toSessionFields(session) });
+            } catch {
+                // The original failure is more useful; an expired session may no longer be abortable.
+            }
+
         throw error;
     }
 }
