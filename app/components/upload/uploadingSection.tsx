@@ -16,6 +16,7 @@ interface UploadingSectionArgs {
   onAllComplete?: () => void | Promise<void>;
   onError?: (error: Error) => void;
   maxUploadSizeBytes?: number;
+  computeHash?: boolean;
 }
 
 export default function UploadingSection({
@@ -25,6 +26,7 @@ export default function UploadingSection({
   onAllComplete,
   onError,
   maxUploadSizeBytes,
+  computeHash,
 }: UploadingSectionArgs) {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +44,7 @@ export default function UploadingSection({
               if (!signal.aborted)
                 setProgress((index + fileProgress) / files.length);
             },
-            { signal, maxUploadSizeBytes },
+            { signal, maxUploadSizeBytes, computeHash },
           );
           if (!signal.aborted)
             await callbacks.current.onComplete(
@@ -60,7 +62,7 @@ export default function UploadingSection({
         }
       }
     });
-  }, [bucket, files, maxUploadSizeBytes]);
+  }, [bucket, files, maxUploadSizeBytes, computeHash]);
 
   return (
     <div className="card bg-gray-100 p-5">
