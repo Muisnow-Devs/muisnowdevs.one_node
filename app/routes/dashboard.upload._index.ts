@@ -1,14 +1,16 @@
 import {
-    abortFileUploadSession,
+    abortDownloadUpload,
     completeFileUploadSession,
     createFileUploadSession,
     getPresignedPartUrl,
+    registerCompletedDownload,
 } from "@/functions/handleFileUpload/index.server";
 import { UploadBucket, UploadMode, UploadSession } from "@/functions/handleFileUpload";
 import { getExpectedUploadPartCount, validateUpload } from "@/functions/handleFileUpload/validation";
 import { privateS3, publicS3 } from "@/storage/aws.server";
 import db from "@/db/client.server";
 import { downloadableFiles } from "@/db/schema";
+import { eq } from "drizzle-orm";
 import { ActionFunctionArgs } from "react-router";
 
 function getBucket(value: FormDataEntryValue | null): UploadBucket | null {
@@ -56,7 +58,13 @@ export async function action({ request }: ActionFunctionArgs) {
         throw new Response("Invalid upload session", { status: 400 });
 
     if (intent === "abort") {
-        const aborted = await abortFileUploadSession(client, bucket, session);
+        const aborted = await abortDownloadUpload(client, bucket, session, async () => {
+            const existing = await db.select({ id: downloadableFiles.id })
+                .from(downloadableFiles)
+                .where(eq(downloadableFiles.filename, session.resourceId))
+                .limit(1);
+            return existing.length > 0;
+        });
         if (!aborted)
             throw new Response("Invalid upload session", { status: 403 });
         return { aborted: true };
@@ -82,24 +90,15 @@ export async function action({ request }: ActionFunctionArgs) {
         if (!completed)
             throw new Response("Invalid upload session", { status: 403 });
 
-        if (bucket === "download") {
-            try {
-                await db.insert(downloadableFiles).values({
-                    filename: session.resourceId,
-                    originalFilename: session.resourceId,
-                    fileSize: session.size,
-                    enabled: false,
-                    lifecycle: "draft",
-                });
-            } catch (error) {
-                try {
-                    await privateS3.deleteResource(session.resourceId);
-                } catch {
-                    // Preserve the database failure; object cleanup can be retried from storage logs.
-                }
-                throw error;
-            }
-        }
+        if (bucket === "download")
+            return registerCompletedDownload(privateS3, (row) => db.insert(downloadableFiles).values({
+                filename: row.filename,
+                originalFilename: row.originalFilename,
+                fileSize: row.fileSize,
+                enabled: false,
+                lifecycle: "draft",
+            }), session);
+
         return { completed: true };
     }
 

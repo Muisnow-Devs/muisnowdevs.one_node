@@ -66,11 +66,12 @@ export class S3Actions {
         }), { expiresIn: EXPIRED_IN });
     }
 
-    async putResourceWithSignedUrl(file: string, contentType: string = "application/octet-stream") {
+    async putResourceWithSignedUrl(file: string, contentType: string = "application/octet-stream", contentLength?: number) {
         return await getSignedUrl(this.client, new PutObjectCommand({
             Bucket: this.bucket,
             Key: file,
             ContentType: contentType,
+            ContentLength: contentLength,
         }), { expiresIn: EXPIRED_IN });
     }
 

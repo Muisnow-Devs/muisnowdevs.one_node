@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+    abortDownloadUpload,
     abortFileUploadSession,
     completeFileUploadSession,
     createFileUploadSession,
     getPresignedPartUrl,
+    registerCompletedDownload,
     UploadStorageClient,
 } from "./index.server";
 import { SINGLE_PUT_MAX_BYTES } from "./validation";
@@ -139,4 +141,82 @@ test("aborting a single session deletes the object rather than aborting a multip
     assert.equal(await abortFileUploadSession(client, "media", session), true);
     assert.deepEqual(calls.deleted, [session.resourceId]);
     assert.equal(calls.abortMultipart, 0);
+});
+
+test("a replayed complete on a single download session is idempotent and does not delete the object", async () => {
+    const { client, calls } = createFakeClient();
+    const session = await createFileUploadSession(client, "download", 1024, "file.pdf");
+
+    // Shaped exactly as mysql2 shapes it: code "ER_DUP_ENTRY" / errno 1062,
+    // passed through unwrapped by drizzle-orm/mysql2.
+    const duplicateKeyError = Object.assign(new Error("Duplicate entry 'x' for key 'downloadable_file.filename'"), {
+        code: "ER_DUP_ENTRY",
+        errno: 1062,
+    });
+    const insert = async () => { throw duplicateKeyError; };
+
+    const result = await registerCompletedDownload(client, insert, session);
+
+    assert.deepEqual(result, { completed: true });
+    assert.deepEqual(calls.deleted, []);
+});
+
+test("a non-duplicate insert failure still triggers the compensating delete and rethrows the original error", async () => {
+    const { client, calls } = createFakeClient();
+    const session = await createFileUploadSession(client, "download", 1024, "file.pdf");
+
+    const dbError = new Error("connection lost");
+    const insert = async () => { throw dbError; };
+
+    await assert.rejects(() => registerCompletedDownload(client, insert, session), (error: unknown) => error === dbError);
+    assert.deepEqual(calls.deleted, [session.resourceId]);
+});
+
+test("abort is refused with 409 for a download that already has a completed row, and the object is not deleted", async () => {
+    const { client, calls } = createFakeClient();
+    const session = await createFileUploadSession(client, "download", 1024, "file.pdf");
+
+    await assert.rejects(
+        () => abortDownloadUpload(client, "download", session, async () => true),
+        (error: unknown) => error instanceof Response && error.status === 409,
+    );
+    assert.deepEqual(calls.deleted, []);
+});
+
+test("abort proceeds normally when no completed row exists for the download", async () => {
+    const { client, calls } = createFakeClient();
+    const session = await createFileUploadSession(client, "download", 1024, "file.pdf");
+
+    assert.equal(await abortDownloadUpload(client, "download", session, async () => false), true);
+    assert.deepEqual(calls.deleted, [session.resourceId]);
+});
+
+test("abort never consults the existence check for a media session", async () => {
+    const { client, calls } = createFakeClient();
+    const session = await createFileUploadSession(client, "media", 1024, "photo.png");
+    let existenceChecked = false;
+
+    const aborted = await abortDownloadUpload(client, "media", session, async () => {
+        existenceChecked = true;
+        return true;
+    });
+
+    assert.equal(aborted, true);
+    assert.equal(existenceChecked, false);
+    assert.deepEqual(calls.deleted, [session.resourceId]);
+});
+
+test("the single-PUT presign is bound to the signed size via ContentLength", async () => {
+    const receivedArgs: [string, string | undefined, number | undefined][] = [];
+    const { client } = createFakeClient({
+        putResourceWithSignedUrl: async (file: string, contentType?: string, contentLength?: number) => {
+            receivedArgs.push([file, contentType, contentLength]);
+            return "https://example.test/put";
+        },
+    });
+
+    const session = await createFileUploadSession(client, "media", 4096, "photo.png", "image/png");
+
+    assert.equal(session.url, "https://example.test/put");
+    assert.deepEqual(receivedArgs, [[session.resourceId, "image/png", 4096]]);
 });

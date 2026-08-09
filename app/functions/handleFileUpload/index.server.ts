@@ -27,7 +27,7 @@ export async function createFileUploadSession(client: UploadStorageClient, bucke
     const contentType = mimetype || "application/octet-stream";
 
     if (mode === "single") {
-        const url = await client.putResourceWithSignedUrl(resourceId, contentType);
+        const url = await client.putResourceWithSignedUrl(resourceId, contentType, size);
         const session = { mode, resourceId, uploadId: "", size };
         return { ...session, validate: sign(getSignaturePayload(bucket, session)), url };
     }
@@ -101,4 +101,59 @@ export async function abortFileUploadSession(client: UploadStorageClient, bucket
 
     await client.abortResourceMultipartUpload(session.resourceId, session.uploadId);
     return true;
+}
+
+// mysql2 attaches `code` ("ER_DUP_ENTRY") and `errno` (1062) directly on the
+// error object it rejects with, and drizzle-orm/mysql2 passes that object
+// through unwrapped. Checking both keeps this correct even if one is ever
+// renamed; anything that doesn't look like this falls through as a real error.
+export function isDuplicateKeyError(error: unknown): boolean {
+    if (typeof error !== "object" || error === null)
+        return false;
+
+    const { code, errno } = error as { code?: unknown; errno?: unknown };
+    return code === "ER_DUP_ENTRY" || errno === 1062;
+}
+
+export interface DownloadRegistration {
+    filename: string;
+    originalFilename: string;
+    fileSize: number;
+}
+
+// A replayed complete on an already-registered download hits the UNIQUE
+// constraint on filename/originalFilename instead of failing for real: the
+// row from the first, successful complete already exists. That is a replay,
+// not a failure, so it must not delete the object the existing row points at.
+export async function registerCompletedDownload(client: Pick<UploadStorageClient, "deleteResource">, insert: (row: DownloadRegistration) => Promise<unknown>, session: UploadSession): Promise<{ completed: true }> {
+    try {
+        await insert({
+            filename: session.resourceId,
+            originalFilename: session.resourceId,
+            fileSize: session.size,
+        });
+    } catch (error) {
+        if (isDuplicateKeyError(error))
+            return { completed: true };
+
+        try {
+            await client.deleteResource(session.resourceId);
+        } catch {
+            // Preserve the database failure; object cleanup can be retried from storage logs.
+        }
+        throw error;
+    }
+
+    return { completed: true };
+}
+
+// The abort signature stays valid for up to 60 minutes after a successful
+// complete, so a replayed abort must not be allowed to delete a completed,
+// DB-registered object. Media uploads have no DB row to consult, so this
+// guard only applies to downloads — that is a known, accepted limitation.
+export async function abortDownloadUpload(client: UploadStorageClient, bucket: UploadBucket, session: UploadSession, hasExistingRow: () => Promise<boolean>): Promise<boolean> {
+    if (bucket === "download" && await hasExistingRow())
+        throw new Response("Upload already completed", { status: 409 });
+
+    return abortFileUploadSession(client, bucket, session);
 }
