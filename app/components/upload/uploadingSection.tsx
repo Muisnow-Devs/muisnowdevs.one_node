@@ -1,8 +1,8 @@
 import { UploadBucket } from "@/functions/handleFileUpload";
 import {
   UploadedFileMetadata,
-  uploadFileInChunks,
-} from "@/functions/handleFileUpload/useChunkedUpload";
+  uploadFile,
+} from "@/functions/handleFileUpload/uploadClient";
 import { scheduleUploadStart } from "@/functions/handleFileUpload/uploadLifecycle";
 import { useEffect, useRef, useState } from "react";
 
@@ -35,15 +35,14 @@ export default function UploadingSection({
     return scheduleUploadStart(async (signal) => {
       try {
         for (let index = 0; index < files.length; index++) {
-          const result = await uploadFileInChunks(
+          const result = await uploadFile(
             files[index],
             bucket,
             (fileProgress) => {
               if (!signal.aborted)
                 setProgress((index + fileProgress) / files.length);
             },
-            signal,
-            maxUploadSizeBytes,
+            { signal, maxUploadSizeBytes },
           );
           if (!signal.aborted)
             await callbacks.current.onComplete(

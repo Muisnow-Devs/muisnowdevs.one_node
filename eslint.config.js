@@ -89,6 +89,9 @@ export default [
             ...importPlugin.configs.typescript.rules,
             "@typescript-eslint/no-empty-object-type": "off",
             "@typescript-eslint/no-require-imports": "off",
+            // tsc already catches undefined identifiers; no-undef false-positives on
+            // TypeScript type-only names like RequestInfo/RequestInit.
+            "no-undef": "off",
         },
     },
 ];

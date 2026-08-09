@@ -1,5 +1,5 @@
 import { UploadStatus } from "@/functions/handleFileUpload";
-import { UploadedFileMetadata } from "@/functions/handleFileUpload/useChunkedUpload";
+import { UploadedFileMetadata } from "@/functions/handleFileUpload/uploadClient";
 import { MetaFunction, Link, useLoaderData } from "react-router";
 import { useReducer, useState } from "react";
 import SelectFileSection from "./selectFile";
@@ -15,7 +15,7 @@ import {
 } from "react-icons/fa";
 
 export function loader() {
-  return { maxUploadSizeBytes: getMaxUploadSizeBytes() };
+  return { maxUploadSizeBytes: getMaxUploadSizeBytes("media") };
 }
 
 export const meta: MetaFunction = () => {
@@ -117,8 +117,6 @@ export default function DashboardMediaNewIndex() {
   const [state, dispatch] = useReducer(reducer, {
     file: [],
     state: UploadStatus.SELECTING,
-    uploadInfo: null,
-    successfulChunks: [],
   });
 
   function handleComplete(resourceId: string, metadata: UploadedFileMetadata) {

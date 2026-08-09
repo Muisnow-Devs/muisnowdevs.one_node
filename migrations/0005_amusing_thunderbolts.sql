@@ -1,0 +1,1 @@
+ALTER TABLE `downloadable_file` MODIFY COLUMN `file_size` bigint;

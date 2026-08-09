@@ -1,18 +1,24 @@
 import {
-    abortFileUploadSession,
+    abortDownloadUpload,
     completeFileUploadSession,
     createFileUploadSession,
-    getPresignedPUTUrl,
+    getPresignedPartUrl,
+    registerCompletedDownload,
 } from "@/functions/handleFileUpload/index.server";
-import { UploadBucket } from "@/functions/handleFileUpload";
+import { UploadBucket, UploadMode, UploadSession } from "@/functions/handleFileUpload";
 import { getExpectedUploadPartCount, validateUpload } from "@/functions/handleFileUpload/validation";
 import { privateS3, publicS3 } from "@/storage/aws.server";
 import db from "@/db/client.server";
 import { downloadableFiles } from "@/db/schema";
+import { eq } from "drizzle-orm";
 import { ActionFunctionArgs } from "react-router";
 
 function getBucket(value: FormDataEntryValue | null): UploadBucket | null {
     return value === "media" || value === "download" ? value : null;
+}
+
+function getMode(value: FormDataEntryValue | null): UploadMode | null {
+    return value === "single" || value === "multipart" ? value : null;
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -30,65 +36,69 @@ export async function action({ request }: ActionFunctionArgs) {
 
     if (intent === "create") {
         const size = Number(formData.get("size"));
-        const error = validateUpload(size);
+        const error = validateUpload(bucket, size);
         if (error)
             throw new Response(error, { status: 400 });
 
         return createFileUploadSession(client, bucket, size, String(formData.get("filename") || ""), String(formData.get("mimetype") || ""));
     }
 
-    const resource = {
+    const mode = getMode(formData.get("mode"));
+    const session: UploadSession | null = mode && {
+        mode,
         resourceId: String(formData.get("resourceId") || ""),
         uploadId: String(formData.get("uploadId") || ""),
         validate: String(formData.get("validate") || ""),
         size: Number(formData.get("size")),
     };
 
-    if (!resource.resourceId || !resource.uploadId || !resource.validate || validateUpload(resource.size))
+    // A multipart session is meaningless without an uploadId; a single one must not carry one.
+    if (!session || !session.resourceId || !session.validate || validateUpload(bucket, session.size) ||
+        (session.mode === "multipart") !== Boolean(session.uploadId))
         throw new Response("Invalid upload session", { status: 400 });
 
     if (intent === "abort") {
-        const aborted = await abortFileUploadSession(client, bucket, resource);
+        const aborted = await abortDownloadUpload(client, bucket, session, async () => {
+            const existing = await db.select({ id: downloadableFiles.id })
+                .from(downloadableFiles)
+                .where(eq(downloadableFiles.originalFilename, session.resourceId))
+                .limit(1);
+            return existing.length > 0;
+        });
         if (!aborted)
             throw new Response("Invalid upload session", { status: 403 });
         return { aborted: true };
     }
 
     if (intent === "part") {
+        if (session.mode !== "multipart")
+            throw new Response("Invalid upload part", { status: 400 });
+
         const part = Number(formData.get("part"));
-        const expectedPartCount = getExpectedUploadPartCount(resource.size);
+        const expectedPartCount = getExpectedUploadPartCount(session.size);
         if (!Number.isInteger(part) || part < 1 || part > expectedPartCount)
             throw new Response("Invalid upload part", { status: 400 });
 
-        const url = await getPresignedPUTUrl(client, bucket, part, resource);
-        if (!url)
+        const presigned = await getPresignedPartUrl(client, bucket, part, session);
+        if (!presigned)
             throw new Response("Invalid upload session", { status: 403 });
-        return { url };
+        return presigned;
     }
 
     if (intent === "complete") {
-        const completed = await completeFileUploadSession(client, bucket, resource);
+        const completed = await completeFileUploadSession(client, bucket, session);
         if (!completed)
             throw new Response("Invalid upload session", { status: 403 });
 
-        if (bucket === "download") {
-            try {
-                await db.insert(downloadableFiles).values({
-                    filename: resource.resourceId,
-                    originalFilename: resource.resourceId,
-                    fileSize: resource.size,
-                    enabled: false,
-                    lifecycle: "draft",
-                });
-            } catch (error) {
-                try {
-                    await privateS3.deleteResource(resource.resourceId);
-                } catch {
-                    // Preserve the database failure; object cleanup can be retried from storage logs.
-                }
-                throw error;
-            }
-        }
+        if (bucket === "download")
+            return registerCompletedDownload(privateS3, (row) => db.insert(downloadableFiles).values({
+                filename: row.filename,
+                originalFilename: row.originalFilename,
+                fileSize: row.fileSize,
+                enabled: false,
+                lifecycle: "draft",
+            }), session);
+
         return { completed: true };
     }
 
