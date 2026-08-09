@@ -1,5 +1,5 @@
 import { UploadStatus } from "@/functions/handleFileUpload";
-import { UploadedFileMetadata } from "@/functions/handleFileUpload/useChunkedUpload";
+import { UploadedFileMetadata } from "@/functions/handleFileUpload/uploadClient";
 import { MetaFunction, Link, useLoaderData } from "react-router";
 import { useReducer, useState } from "react";
 import SelectFileSection from "./selectFile";

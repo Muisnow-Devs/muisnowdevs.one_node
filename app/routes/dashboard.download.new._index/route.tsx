@@ -1,7 +1,7 @@
 import BottomAction from "@/components/bottomAction";
 import FileUploadComponent from "@/components/upload";
 import UploadingSection from "@/components/upload/uploadingSection";
-import { UploadedFileMetadata } from "@/functions/handleFileUpload/useChunkedUpload";
+import { UploadedFileMetadata } from "@/functions/handleFileUpload/uploadClient";
 import db from "@/db/client.server";
 import { downloadableFiles } from "@/db/schema";
 import { privateS3 } from "@/storage/aws.server";
