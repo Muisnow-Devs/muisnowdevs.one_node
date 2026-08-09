@@ -117,8 +117,6 @@ export default function DashboardMediaNewIndex() {
   const [state, dispatch] = useReducer(reducer, {
     file: [],
     state: UploadStatus.SELECTING,
-    uploadInfo: null,
-    successfulChunks: [],
   });
 
   function handleComplete(resourceId: string, metadata: UploadedFileMetadata) {

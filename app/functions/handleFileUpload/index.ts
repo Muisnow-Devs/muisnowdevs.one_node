@@ -29,20 +29,6 @@ export interface PartUploadResponse {
     validate: string;
 }
 
-// Superseded by UploadSession / UploadPart's role in multipartParts.ts. Task 7
-// removes both once index.server.ts and reducer.ts no longer reference them.
-export interface UploadPart {
-    ETag: string;
-    PartNumber: number;
-}
-
-export interface ServerUploadResponse {
-    resourceId: string,
-    uploadId: string,
-    validate: string,
-    size: number,
-}
-
 // The extension is concatenated into the S3 object key and into the signature
 // payload, so anything outside this set is dropped rather than trusted.
 const SAFE_EXTENSION = /^[a-z0-9]{1,12}$/;
