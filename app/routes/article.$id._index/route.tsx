@@ -17,40 +17,40 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
     ];
 };
 
-async function getArticle(id: string) {
+async function getArticle(id: number) {
     const response = await db
         .query
         .articles
         .findFirst({
-            where: (v) => and(eq(v.id, Number(id)), eq(v.enabled, true)),
+            where: (v) => and(eq(v.id, id), eq(v.enabled, true)),
             with: { articleLabels: { with: { label: true } } },
             columns: {
                 enabled: false,
                 collection: false
             }
         });
-    
-    if (!response) 
+
+    if (!response)
         throw new Response(null, { status: 404 });
-    
+
     // get previous and next article
     const previousSQL = db
         .query
         .articles
         .findFirst({
-            where: (v) => lt(v.id, Number(id)),
+            where: (v) => lt(v.id, id),
             orderBy: (v) => desc(v.id),
             columns: {
                 id: true,
                 title: true
             }
         });
-    
+
     const nextSQL = db
         .query
         .articles
         .findFirst({
-            where: (v) => gt(v.id, Number(id)),
+            where: (v) => gt(v.id, id),
             orderBy: (v) => asc(v.id),
             columns: {
                 id: true,
@@ -59,7 +59,7 @@ async function getArticle(id: string) {
         });
 
     const [previous, next] = await Promise.all([previousSQL, nextSQL]);
-    
+
     const { articleLabels, ...article } = response;
     return {
         ...article,
@@ -76,7 +76,11 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
     invariant(id, "id is required");
 
-    const article = await getArticle(id);
+    const idNum = Number(id);
+    if (Number.isNaN(idNum) || idNum <= 0)
+        throw new Response(null, { status: 404 });
+
+    const article = await getArticle(idNum);
     return article;
 }
 
@@ -131,7 +135,7 @@ export default function ArticlePage() {
 export function ErrorBoundary() {
     return <div className="w-full h-screen grid place-items-center">
         <div>
-            <h1 className="text-4xl font-bold mb-5">文章不存在 😭</h1> 
+            <h1 className="text-4xl font-bold mb-5">文章不存在 😭</h1>
             <p className="max-w-xl">抱歉！你可能來晚了，在這個無垠的宇宙之中，這篇無名的文章如同塵埃般消失在永無止境的時光之中。</p>
             <BackToArticle />
         </div>
