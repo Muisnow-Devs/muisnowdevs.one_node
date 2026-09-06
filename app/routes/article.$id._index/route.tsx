@@ -18,6 +18,15 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
                   { property: "og:description", content: data.description },
                   { property: "og:type", content: "article" },
                   { property: "og:site_name", content: "Muisnow Devs" },
+                  {
+                      property: "og:url",
+                      content: `https://muisnowdevs.one/article/${data.id}`,
+                  },
+                  {
+                      property: "og:logo",
+                      content:
+                          "https://objects.sanziusercontent.com/sanzi_images/square.png",
+                  },
                   { property: "og:image:width", content: "1200" },
                   { property: "og:image:height", content: "630" },
                   {
