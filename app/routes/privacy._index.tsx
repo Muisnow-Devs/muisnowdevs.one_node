@@ -38,7 +38,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const queryLocale = url.searchParams.get("lang");
     const queryVersion = url.searchParams.get("version");
     const headerLocale = resolveLocaleFromHeader(
-        request.headers.get("accept-language")
+        request.headers.get("accept-language"),
     );
     const preferredLocale = queryLocale ?? headerLocale ?? undefined;
 
@@ -108,7 +108,7 @@ export default function PrivacyIndex() {
                             <option key={option.version} value={option.version}>
                                 {formatVersionLabel(
                                     option.version,
-                                    option.isLatest
+                                    option.isLatest,
                                 )}
                             </option>
                         ))}
