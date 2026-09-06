@@ -17,10 +17,16 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
                   { property: "og:title", content: data.title },
                   { property: "og:description", content: data.description },
                   { property: "og:type", content: "article" },
-                  { property: "og:image", content: `/og/${data.id}` },
+                  {
+                      property: "og:image",
+                      content: `https://muisnowdevs.one/og/${data.id}`,
+                  },
 
                   { name: "twitter:card", content: "summary_large_image" },
-                  { name: "twitter:image", content: `/og/${data.id}` },
+                  {
+                      name: "twitter:image",
+                      content: `https://muisnowdevs.one/og/${data.id}`,
+                  },
               ]
             : [];
 
