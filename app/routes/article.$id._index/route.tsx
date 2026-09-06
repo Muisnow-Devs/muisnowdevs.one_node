@@ -17,11 +17,15 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
                   { property: "og:title", content: data.title },
                   { property: "og:description", content: data.description },
                   { property: "og:type", content: "article" },
+                  { property: "og:site_name", content: "Muisnow Devs" },
+                  { property: "og:image:width", content: "1200" },
+                  { property: "og:image:height", content: "630" },
                   {
                       property: "og:image",
                       content: `https://muisnowdevs.one/og/${data.id}`,
                   },
 
+                  { name: "twitter:site", content: "@Hen000000hen" },
                   { name: "twitter:card", content: "summary_large_image" },
                   {
                       name: "twitter:image",
