@@ -9,6 +9,7 @@ import satori, { Font } from "satori";
 import fira from "@/fonts/firacode.ttf?inline";
 import noto from "@/fonts/notoserif.ttf?inline";
 import { ArticleOg } from "./image";
+import { Resvg } from "@resvg/resvg-js";
 
 async function loadFont(name: string, path: string): Promise<Font> {
     const formattedPath = new URL(path, import.meta.url);
@@ -59,7 +60,8 @@ export async function loader({ params }: LoaderFunctionArgs) {
         },
     );
 
-    return new Response(svg, {
-        headers: { "Content-Type": "image/svg+xml" },
+    const png = new Resvg(svg).render().asPng();
+    return new Response(Buffer.from(png), {
+        headers: { "Content-Type": "image/png" },
     });
 }
