@@ -1,0 +1,1 @@
+ALTER TABLE `downloadable_file` ADD `updated_at` timestamp ON UPDATE CURRENT_TIMESTAMP;

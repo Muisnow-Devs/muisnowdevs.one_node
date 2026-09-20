@@ -14,7 +14,7 @@
     "migrations:gen": "drizzle-kit generate",
     "migrations:gen-empty": "drizzle-kit generate --custom",
     "migrations:up": "drizzle-kit up",
-    "migrations:apply": "tsx ./app/db/migrate.ts"
+    "migrations:apply": "tsx ./app/infrastructure/db/migrate.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1090.0",
@@ -67,6 +67,7 @@
     "@typescript-eslint/eslint-plugin": "^8.64.0",
     "@typescript-eslint/parser": "^8.64.0",
     "drizzle-kit": "^0.31.10",
+    "esbuild": "^0.25.4",
     "eslint": "^10.7.0",
     "eslint-import-resolver-typescript": "^4.4.5",
     "eslint-plugin-import": "^2.32.0",

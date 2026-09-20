@@ -1,5 +1,5 @@
-import db from "@/db/client.server";
-import { and, asc, desc, eq, gt, lt } from "drizzle-orm";
+import { getPublicArticle } from "@/features/articles/article.server";
+import { absoluteUrl } from "@/features/seo/site";
 import invariant from "tiny-invariant";
 import { MetaFunction, useLoaderData, LoaderFunctionArgs } from "react-router";
 import MarkdownComponent from "@/components/markdown";
@@ -20,7 +20,7 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
                   { property: "og:site_name", content: "Muisnow Devs" },
                   {
                       property: "og:url",
-                      content: `https://muisnowdevs.one/article/${data.id}`,
+                      content: absoluteUrl(`/article/${data.id}`),
                   },
                   {
                       property: "og:logo",
@@ -31,14 +31,26 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
                   { property: "og:image:height", content: "630" },
                   {
                       property: "og:image",
-                      content: `https://muisnowdevs.one/og/${data.id}`,
+                      content: absoluteUrl(`/og/${data.id}`),
                   },
 
                   { name: "twitter:site", content: "@Hen000000hen" },
                   { name: "twitter:card", content: "summary_large_image" },
                   {
                       name: "twitter:image",
-                      content: `https://muisnowdevs.one/og/${data.id}`,
+                      content: absoluteUrl(`/og/${data.id}`),
+                  },
+                  { tagName: "link", rel: "canonical", href: absoluteUrl(`/article/${data.id}`) },
+                  {
+                      "script:ld+json": {
+                          "@context": "https://schema.org",
+                          "@type": "Article",
+                          headline: data.title,
+                          description: data.description,
+                          url: absoluteUrl(`/article/${data.id}`),
+                          datePublished: data.createdAt.toISOString(),
+                          ...(data.updatedAt ? { dateModified: data.updatedAt.toISOString() } : {}),
+                      },
                   },
               ]
             : [];
@@ -62,50 +74,6 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
     ];
 };
 
-async function getArticle(id: number) {
-    const response = await db.query.articles.findFirst({
-        where: (v) => and(eq(v.id, id), eq(v.enabled, true)),
-        with: { articleLabels: { with: { label: true } } },
-        columns: {
-            enabled: false,
-            collection: false,
-        },
-    });
-
-    if (!response) throw new Response(null, { status: 404 });
-
-    // get previous and next article
-    const previousSQL = db.query.articles.findFirst({
-        where: (v) => lt(v.id, id),
-        orderBy: (v) => desc(v.id),
-        columns: {
-            id: true,
-            title: true,
-        },
-    });
-
-    const nextSQL = db.query.articles.findFirst({
-        where: (v) => gt(v.id, id),
-        orderBy: (v) => asc(v.id),
-        columns: {
-            id: true,
-            title: true,
-        },
-    });
-
-    const [previous, next] = await Promise.all([previousSQL, nextSQL]);
-
-    const { articleLabels, ...article } = response;
-    return {
-        ...article,
-        labels: articleLabels.map(({ label }) => label),
-        near: {
-            previous,
-            next,
-        },
-    };
-}
-
 export async function loader({ params }: LoaderFunctionArgs) {
     const { id } = params;
 
@@ -115,8 +83,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
     if (Number.isNaN(idNum) || idNum <= 0)
         throw new Response(null, { status: 404 });
 
-    const article = await getArticle(idNum);
-    return article;
+    return getPublicArticle(idNum);
 }
 
 export default function ArticlePage() {

@@ -1,6 +1,6 @@
 import { LoaderFunctionArgs } from "react-router";
 import invariant from "tiny-invariant";
-import { getItem } from "@/functions/getDownloadableItem.server";
+import { getItem } from "@/features/downloads/download.server";
 
 export async function loader({ params }: LoaderFunctionArgs) {
     const { id } = params;

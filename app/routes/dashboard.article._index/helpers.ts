@@ -1,12 +1,4 @@
-export function getSelectedLabelIds(formData: FormData) {
-    return [...new Set(
-        formData
-            .getAll("labelIds")
-            .filter((value): value is string => typeof value === "string")
-            .map((value) => value.trim())
-            .filter(Boolean)
-    )];
-}
+export { getSelectedLabelIds } from "@/features/articles/article-form";
 
 export function updateDashboardArticleParams(
     current: URLSearchParams,
@@ -14,11 +6,8 @@ export function updateDashboardArticleParams(
     value: string,
 ) {
     const next = new URLSearchParams(current);
-    if (value)
-        next.set(key, value);
-    else
-        next.delete(key);
-    if (key !== "page")
-        next.delete("page");
+    if (value) next.set(key, value);
+    else next.delete(key);
+    if (key !== "page") next.delete("page");
     return next;
 }

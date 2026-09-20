@@ -5,11 +5,23 @@ build
 
 .git
 .gitignore
+.github
+.agents
+.claude
+.codex
+.superpowers
+.tokensave
 
 *.env
 .env
 .env.*
+docker.env
+test.env
+start-dependencies.ps1
+new.sql
+old.sql
 
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+*.stackdump

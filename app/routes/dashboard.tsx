@@ -1,6 +1,6 @@
 import { LoaderFunctionArgs, MiddlewareFunction, Outlet, useLoaderData } from "react-router";
-import { AccessStatus } from "@/functions/cloudflareAccess";
-import { accessIdentityContext, accessStatus, requireCloudflareAccess } from "@/functions/cloudflareAccess/index.server";
+import { AccessStatus } from "@/infrastructure/auth/cloudflare-access";
+import { accessIdentityContext, accessStatus, requireCloudflareAccess } from "@/infrastructure/auth/cloudflare-access/index.server";
 
 // Middleware rather than this route's loader: on a document POST the leaf action runs
 // before parent loaders, and a single-fetch request can subset which loaders run at all,

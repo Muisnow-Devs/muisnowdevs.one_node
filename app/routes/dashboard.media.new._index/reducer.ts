@@ -1,4 +1,4 @@
-import { UploadStatus } from "@/functions/handleFileUpload";
+import { UploadStatus } from "@/features/uploads";
 
 export enum ActionType {
     SET_FILE,
@@ -6,8 +6,8 @@ export enum ActionType {
 }
 
 export type Action =
-    | { type: ActionType.SET_FILE, payload: File[] }
-    | { type: ActionType.SET_STATE, payload: UploadStatus };
+    | { type: ActionType.SET_FILE; payload: File[] }
+    | { type: ActionType.SET_STATE; payload: UploadStatus };
 
 export interface UploadInfo {
     file: File[];

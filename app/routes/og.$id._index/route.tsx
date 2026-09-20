@@ -3,8 +3,7 @@
 
 import { LoaderFunctionArgs } from "react-router";
 import invariant from "tiny-invariant";
-import db from "@/db/client.server";
-import { and, eq } from "drizzle-orm";
+import { getArticlePreview } from "@/features/articles/article.server";
 import satori, { Font } from "satori";
 import fira from "@/fonts/firacode.ttf?inline";
 import noto from "@/fonts/notoserif.ttf?inline";
@@ -38,11 +37,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
         throw new Response(null, { status: 404 });
 
     const fonts = await OG_FONTS;
-    const article = await db.query.articles
-        .findFirst({
-            where: (v) => and(eq(v.id, idNum), eq(v.enabled, true)),
-        })
-        .execute();
+    const article = await getArticlePreview(idNum);
 
     if (!article) throw new Response(null, { status: 404 });
 

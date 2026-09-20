@@ -2,7 +2,7 @@ import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import type { ChangeEvent } from "react";
 import { useLoaderData, useSearchParams } from "react-router";
 import Markdown from "@/components/markdown";
-import { loadPrivacyPolicy } from "@/models/privacy.server";
+import { loadPrivacyPolicy } from "@/features/privacy/privacy.server";
 
 function resolveLocaleFromHeader(header: string | null) {
     if (!header) return undefined;
