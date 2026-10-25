@@ -1,4 +1,4 @@
-FROM node:24.19.0-bookworm-slim AS base
+FROM node:24-bookworm-slim AS base
 
 WORKDIR /app
 
@@ -32,7 +32,7 @@ COPY package.json yarn.lock ./
 
 RUN yarn install --frozen-lockfile --non-interactive --production=true && yarn cache clean
 
-FROM node:24.19.0-bookworm-slim AS application
+FROM node:24-bookworm-slim AS application
 
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
