@@ -1,5 +1,15 @@
 # muisnowdevs.one
 
+> [!NOTE]
+> This repository is a public archive of the original source code for the Muisnow Devs website.
+>
+> You may copy, modify, and use this source code for your own personal website.
+> When using a substantial portion of this project, please include the following attribution somewhere visible on your website, such as in the footer or credits page:
+>
+> ```
+> Built using source code from the original Muisnow Devs website.
+> ```
+
 The site is a React Router SSR application. Routes form the HTTP boundary, feature modules own site behavior, and `app/infrastructure` contains MySQL/Drizzle, Redis, S3-compatible storage, and Cloudflare Access integrations.
 
 ## Local development
